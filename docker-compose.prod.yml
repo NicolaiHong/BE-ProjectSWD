@@ -1,0 +1,9 @@
+services:
+  api:
+    build:
+      target: production #  Force production stage
+    command: npm start # Giữ nguyên
+    environment:
+      NODE_ENV: production
+      LOG_LEVEL: warn
+    volumes: [] #  Không mount code
