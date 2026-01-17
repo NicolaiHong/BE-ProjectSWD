@@ -1,0 +1,13 @@
+services:
+  api:
+    build:
+      target: development
+    volumes:
+      - ./src:/app/src # ✅ Mount src/
+      - ./nodemon.json:/app/nodemon.json # ✅ Mount nodemon config
+      - /app/node_modules # ✅ Preserve node_modules
+      - /app/dist # ✅ Không overwrite dist/
+    command: npm run dev
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug

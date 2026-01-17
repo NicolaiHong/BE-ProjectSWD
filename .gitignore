@@ -68,6 +68,7 @@ web_modules/
 # dotenv environment variable files
 .env
 .env.*
+node_modules
 !.env.example
 
 # parcel-bundler cache (https://parceljs.org/)
@@ -146,3 +147,14 @@ pgdata/
 
 # Docker volumes
 volumes/
+cat >> .gitignore << 'EOF'
+# Compiled output
+dist/
+*.js
+*.d.ts
+*.js.map
+*.d.ts.map
+
+# Exceptions (nếu có config files .js)
+!*.config.js
+EOF
