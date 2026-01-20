@@ -24,7 +24,7 @@ This structure makes the application modular, easier to test, and scalable.
 
 ## Project Folder Structure
 
-```
+````
 ai-idea-api/
 ├── docker-compose.yaml
 ├── Dockerfile
@@ -44,130 +44,103 @@ ai-idea-api/
     │   ├── generatedUIController.ts
     │   ├── ideaController.ts
     │   ├── uiSchemaController.ts
-    │   └── userController.ts
-    ├── middlewares/
-    │   ├── errorHandler.ts
-    │   └── validation.ts
-    ├── models/
-    │   ├── AIRequest.ts
-    │   ├── AIResponse.ts
-    │   ├── GeneratedCode.ts
-    │   ├── GeneratedUI.ts
-    │   ├── Idea.ts
-    │   ├── UISchema.ts
-    │   └── User.ts
-    ├── repositories/
-    │   ├── aiRequestRepository.ts
-    │   ├── aiResponseRepository.ts
-    │   ├── generatedCodeRepository.ts
-    │   ├── generatedUIRepository.ts
-    │   ├── ideaRepository.ts
-    │   ├── uiSchemaRepository.ts
-    │   └── userRepository.ts
-    ├── routes/
-    │   ├── aiRequestRoutes.ts
-    │   ├── aiResponseRoutes.ts
-    │   ├── generatedCodeRoutes.ts
-    │   ├── generatedUIRoutes.ts
-    │   ├── ideaRoutes.ts
-    │   ├── index.ts
-    │   ├── uiSchemaRoutes.ts
-    │   └── userRoutes.ts
-    ├── services/
-    │   ├── aiRequestService.ts
-    │   ├── aiResponseService.ts
-    │   ├── generatedCodeService.ts
-    │   ├── generatedUIService.ts
-    │   ├── ideaService.ts
-    │   ├── uiSchemaService.ts
-    │   └── userService.ts
-    └── utils/
-        ├── ApiResponse.ts
-        └── logger.ts
-```
+    # AI Idea API — Development Setup
 
-## How to Run with Docker (Recommended)
+    This README provides a concise, developer-focused setup guide for the AI Idea API. Follow these steps after cloning the repository so you can start coding quickly.
 
-Using Docker is the simplest way to get the project running, as it handles the database and application environment automatically.
+    ## Quick links
+    - Project: [README.md](README.md)
+    - Database schema: [database/schema.sql](database/schema.sql)
 
-1.  **Clone the repository**
+    ## Included ERD diagrams
+    Add or replace these images in the `images/` directory (placeholders have been added in the repo):
 
-    ```sh
+    - ERD Logical: `images/erd_logical.png`
+    - ERD Conceptual: `images/erd_conceptual.png`
+    - ERD Diagram: `images/erd_diagram.png`
+
+    ## Requirements
+    - Node.js 18+ and npm (or yarn)
+    - Docker & Docker Compose (recommended)
+    - (Optional) `psql` client if you prefer importing the SQL locally
+
+    ## 1) Clone the repo
+
+    ```bash
     git clone <your-repository-url>
     cd ai-idea-api
     ```
 
-2.  **Create Environment File**
-    Create a `.env` file in the root of the project and populate it with the necessary environment variables. See the example below.
+    ## 2) Environment variables
+    Create a `.env` file in the project root. Example variables to include:
 
-3.  **Build and Run with Docker Compose**
-    ```sh
-    docker-compose up --build
+    ```env
+    # Server
+    PORT=3000
+    NODE_ENV=development
+
+    # Database (adjust when running locally)
+    DB_HOST=postgres
+    DB_PORT=5432
+    DB_USER=postgres
+    DB_PASSWORD=postgres
+    DB_NAME=ai_idea_db
+
+    # Authentication
+    JWT_SECRET=replace-with-a-secret
+    JWT_EXPIRES_IN=1d
     ```
-    The API will be available at `http://localhost:3000`.
 
-## How to Run Locally (Without Docker)
+    Note: the project does not include a `.env.example`. Use the variables above and adapt to your environment.
 
-If you prefer to run the application without Docker, you will need to set up Node.js and PostgreSQL on your machine.
+    ## 3) Start with Docker (recommended)
+    This starts the API and a PostgreSQL database defined in `docker-compose.yml`.
 
-1.  **Install Dependencies**
+    ```bash
+    docker-compose up --build -d
+    ```
 
-    ```sh
+    After the database container is up, import the schema into the database. One common way (runs from the host) is:
+
+    ```bash
+    # create database (if not created by compose)
+    docker-compose exec -T postgres psql -U postgres -c "CREATE DATABASE ai_idea_db;"
+
+    # import schema from the repository into the database container
+    docker cp database/schema.sql $(docker-compose ps -q postgres):/schema.sql
+    docker-compose exec -T postgres psql -U postgres -d ai_idea_db -f /schema.sql
+    ```
+
+    If you have `psql` locally you can also run:
+
+    ```bash
+    # psql -h <host> -p <port> -U <user> -d ai_idea_db -f database/schema.sql
+    ```
+
+    ## 4) Install dependencies and run locally (optional)
+    If you prefer coding without Docker, install dependencies and run the dev server:
+
+    ```bash
     npm install
-    ```
-
-2.  **Set up PostgreSQL**
-    - Ensure you have a running PostgreSQL instance.
-    - Create a database for this project.
-    - Run the `schema.sql` script to set up the tables.
-
-    ```sh
-    psql -U your_username -d your_database_name -f database/schema.sql
-    ```
-
-3.  **Configure Environment Variables**
-    Create a `.env` file and update the database connection details to point to your local PostgreSQL instance.
-
-4.  **Run the Application**
-    ```sh
     npm run dev
     ```
-    This command uses `ts-node-dev` to run the application, which automatically restarts on file changes.
 
-## Environment Variables
+    The `dev` script uses `ts-node-dev` and watches for file changes. See `package.json` for scripts.
 
-Create a `.env` file in the project root.
+    ## 5) End-to-end basic checklist for a developer
+    - Clone the repo and create `.env`.
+    - Start `docker-compose up -d` and import `database/schema.sql`.
+    - Run `npm install`.
+    - Start the server with `npm run dev` and open `http://localhost:3000` (adjust if your server uses a different port).
 
-```env
-# Server Configuration
-PORT=3000
-NODE_ENV=development
+    ## Notes and expectations for contributors
+    - Code structure follows a Controller → Service → Repository pattern under `src/`.
+    - Add new DB schema changes to `database/schema.sql` or adopt a migration tool (recommended before production deployments).
+    - If you add images for ERD diagrams, place them under `images/` and reference them in docs as shown above.
 
-# PostgreSQL Database Connection
-DB_HOST=postgres         # Use 'localhost' if running locally
-DB_PORT=5432
-DB_USER=your_db_user
-DB_PASSWORD=your_db_password
-DB_NAME=ai_idea_api
+    ---
 
-# JWT for Authentication
-JWT_SECRET=a-very-strong-and-secret-key
-JWT_EXPIRES_IN=1d
-```
-
-## Available NPM Scripts
-
-- `start`: Runs the compiled JavaScript code (for production).
-- `dev`: Starts the development server with hot-reloading using `ts-node-dev`.
-- `build`: Compiles the TypeScript code to JavaScript.
-- `lint`: Lints the codebase using ESLint.
-- `test`: Runs tests (if configured).
-
-## Future Improvements
-
-- **API Documentation**: Integrate Swagger or OpenAPI for automated API documentation.
-- **Testing**: Add a comprehensive suite of unit, integration, and end-to-end tests.
-- **CI/CD**: Implement a CI/CD pipeline for automated testing and deployment.
-- **Caching**: Introduce a caching layer (e.g., Redis) to improve performance for frequently accessed data.
-- **Advanced Authentication**: Add support for OAuth 2.0 providers (e.g., Google, GitHub).
-- **Database Migrations**: Use a migration tool like `node-pg-migrate` or TypeORM migrations to manage database schema changes.
+    If you want, I can:
+    - Replace the placeholder image files with the actual ERD images you attached (please upload them),
+    - Or commit these README changes and the placeholders for you now.
+````
