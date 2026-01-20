@@ -141,9 +141,12 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
 # Database
-data/
-pgdata/
-*.sql
+# data/
+# pgdata/
+# *.sql
+#database/
+!database/schema.sql
+!database/*.sql
 
 # Docker volumes
 volumes/
