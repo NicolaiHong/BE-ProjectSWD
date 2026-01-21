@@ -1,67 +1,52 @@
-import express, { Request, Response } from "express";
+import express from "express";
+import swaggerUi from "swagger-ui-express";
+import { config } from "./config/constants";
+import { swaggerSpec } from "./config/swagger";
+import authRoutes from "./routes/auth.routes";
 import cors from "cors";
-import morgan from "morgan";
-import dotenv from "dotenv";
-import { Pool } from "pg";
 
-// Load environment variables
-dotenv.config();
+import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 
 const app = express();
-const PORT = process.env.API_PORT || 3000;
+//set up cors
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3001", // React dev server
+      "http://localhost:3000", // Next.js dev server
+      "http://localhost:5173", // Vite dev server
+      "http://localhost:8080", // Vue dev server
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 
-// Middleware
-app.use(cors());
-app.use(morgan("dev"));
+// Middlewares
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Database connection
-const pool = new Pool({
-  host: process.env.DB_HOST || "postgres",
-  port: parseInt(process.env.DB_PORT || "5432"),
-  user: process.env.DB_USER || "postgres",
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME || "ai_idea_db",
-});
+// Swagger Documentation
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Test database connection
-pool.query("SELECT NOW()", (err, res) => {
-  if (err) {
-    console.error("❌ Database connection failed:", err.message);
-  } else {
-    console.log("✅ Database connected at:", res.rows[0].now);
-  }
+// Health check
+app.get("/health", (req, res) => {
+  res.json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
 // Routes
-app.get("/", (req: Request, res: Response) => {
-  res.json({
-    message: "AI Idea API is running!",
-    version: "1.0.0",
-    timestamp: new Date(),
-  });
-});
+app.use("/api/auth", authRoutes);
 
-app.get("/health", async (req: Request, res: Response) => {
-  try {
-    // Test database connection
-    await pool.query("SELECT 1");
-    res.status(200).json({
-      status: "healthy",
-      timestamp: new Date(),
-      database: "connected",
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: "unhealthy",
-      error: error instanceof Error ? error.message : "Unknown error",
-      database: "disconnected",
-    });
-  }
-});
+// Error handlers
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📍 Health check: http://localhost:${PORT}/health`);
+app.listen(config.port, () => {
+  console.log(`🚀 Server running on port ${config.port}`);
+  console.log(`📚 Swagger docs: http://localhost:${config.port}/api-docs`);
+  console.log(`🏥 Health check: http://localhost:${config.port}/health`);
 });
+
+export default app;
