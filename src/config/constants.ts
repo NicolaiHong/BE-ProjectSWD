@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 
 dotenv.config();
-
+//JWT Tokens
 const jwtAccessToken = process.env.JWT_ACCESS_TOKEN;
 const jwtRefreshToken = process.env.JWT_REFRESH_TOKEN;
 
