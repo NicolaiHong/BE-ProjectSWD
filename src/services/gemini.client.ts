@@ -1,5 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
-import { config } from "./constants";
+import { config } from "../config/constants";
 
 //Gemini
 const apiKey = process.env.GEMINI_API_KEY;
@@ -9,7 +9,7 @@ if (!apiKey)
   throw new Error("GEMINI_API_KEY is required in environment variables");
 const ai = new GoogleGenAI({ apiKey });
 
-export async function gemniTextForPrompt(promptText: string): Promise<string> {
+export async function geminiTextForPrompt(promptText: string): Promise<string> {
   const res = await ai.models.generateContent({
     model,
     contents: promptText,

@@ -13,7 +13,7 @@ export class GeneratorRepository {
   //get API and new config by api id
   async getApiAndConfig(
     api_id: string,
-  ): Promise<{ api: ApiRow; config: ApiConfigRow } | null> {
+  ): Promise<{ api: ApiRow; config: ApiConfigRow }> {
     const apiRes = await pool.query<ApiRow>(
       `SELECT api_id, name, method, endpoint, description FROM api WHERE api_id = $1`,
       [api_id],
@@ -23,7 +23,7 @@ export class GeneratorRepository {
       `SELECT config_id, api_id, auth_required, pagination, searchable, columns, filters FROM api_config WHERE api_id = $1 ORDER BY created_at DESC LIMIT 1`,
       [api_id],
     );
-    return { api: apiRes.rows[0], config: configRes.rows[0] ?? null };
+    return { api: apiRes.rows[0], config: configRes.rows[0] };
   }
   //inert new UI generation schema
   async insertUISchema(
