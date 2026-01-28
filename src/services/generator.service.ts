@@ -1,18 +1,9 @@
-import { ApiRow } from "./../types/ApiRow";
 import { GeneratorRepository } from "../repositories/generator.repository";
 import { geminiTextForPrompt } from "./gemini.client";
+import { FrameworkKey } from "../types/FrameworkKey";
+import { FrameworkConfig } from "../interface/FrameworkConfig";
 
-import { ApiConfigRow } from "../types/ApiConfigRow";
-
-type FrameworkKey = "react" | "angular" | "vue" | "php" | "nextjs";
-
-interface FrameworkConfig {
-  name: string;
-  extension: string;
-  promptHint: string;
-  defaultPath: (pageName: string) => string;
-}
-
+//type FrameworkKey = "react" | "angular" | "vue" | "php" | "nextjs";
 const FRAMEWORK_CONFIGS: Record<FrameworkKey, FrameworkConfig> = {
   react: {
     name: "React + TypeScript",

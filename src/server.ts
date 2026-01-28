@@ -6,6 +6,7 @@ import authRoutes from "./routes/auth.routes";
 import cors from "cors";
 
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
+import generatorRoutes from "./routes/generator.routes";
 
 const app = express();
 //set up cors
@@ -37,6 +38,7 @@ app.get("/health", (req, res) => {
 
 // Routes
 app.use("/api/auth", authRoutes);
+app.use("/api/generator", generatorRoutes);
 
 // Error handlers
 app.use(notFoundHandler);
