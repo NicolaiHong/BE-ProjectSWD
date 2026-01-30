@@ -41,7 +41,7 @@ Create a `.env` file in the root directory with the following configuration:
 **For Windows (PowerShell):**
 
 ```powershell
-@"
+
 # Server Configuration
 PORT=3000
 NODE_ENV=development
@@ -65,13 +65,13 @@ SMTP_PASS=your-app-password
 
 # Google Gemini API (Optional)
 GEMINI_API_KEY=your-gemini-api-key
-"@ | Out-File -FilePath .env -Encoding utf8
+
 ```
 
 **For Mac/Linux:**
 
 ```bash
-cat > .env << 'EOF'
+
 # Server Configuration
 PORT=3000
 NODE_ENV=development
@@ -95,7 +95,7 @@ SMTP_PASS=your-app-password
 
 # Google Gemini API (Optional)
 GEMINI_API_KEY=your-gemini-api-key
-EOF
+
 ```
 
 ### 3. Build and Start Docker Containers
