@@ -1,5 +1,5 @@
 import { GeneratorRepository } from "../repositories/generator.repository";
-import { geminiTextForPrompt } from "./gemini.client";
+import { geminiTextForPrompt } from "../clients/gemini.client";
 import {
   FrameworkKey,
   FrameworkConfig,

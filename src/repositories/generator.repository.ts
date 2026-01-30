@@ -84,8 +84,8 @@ export class GeneratorRepository {
         data.auth_required ?? false,
         data.pagination ?? true,
         data.searchable ?? true,
-        data.columns ?? null,
-        data.filters ?? null,
+        data.columns ? JSON.stringify(data.columns) : null,
+        data.filters ? JSON.stringify(data.filters) : null,
       ],
     );
     return rows[0];
@@ -120,8 +120,8 @@ export class GeneratorRepository {
         data.auth_required,
         data.pagination,
         data.searchable,
-        data.columns,
-        data.filters,
+        data.columns ? JSON.stringify(data.columns) : undefined,
+        data.filters ? JSON.stringify(data.filters) : undefined,
       ],
     );
     return rowCount ? rows[0] : null;
@@ -136,13 +136,13 @@ export class GeneratorRepository {
       [api_id],
     );
     if (apiRes.rowCount === 0) throw new Error("API not found");
-    const configRes = await pool.query(
+    const configRes = await pool.query<ApiConfigRow>(
       `SELECT config_id, api_id, auth_required, pagination, searchable, columns, filters FROM api_config WHERE api_id = $1 ORDER BY created_at DESC LIMIT 1`,
       [api_id],
     );
     return { api: apiRes.rows[0], config: configRes.rows[0] };
   }
-  //inert new UI generation schema
+  //insert new UI generation schema
   async insertUISchema(
     config_id: string,
     schema_json: any,
@@ -152,7 +152,7 @@ export class GeneratorRepository {
       `INSERT INTO ui_schema (config_id, schema_json, description)
        VALUES ($1, $2, $3)
        RETURNING schema_id, config_id, schema_json, description, created_at`,
-      [config_id, schema_json, description ?? null],
+      [config_id, JSON.stringify(schema_json), description ?? null],
     );
     return res.rows[0];
   }
@@ -198,7 +198,11 @@ export class GeneratorRepository {
       `INSERT INTO generated_code (schema_id, frontend_code, config_files)
     VALUES ($1, $2, $3)
     RETURNING code_id, schema_id, frontend_code, config_files, created_at`,
-      [schema_id, frontend_code, config_files],
+      [
+        schema_id,
+        frontend_code,
+        config_files ? JSON.stringify(config_files) : null,
+      ],
     );
     return rows[0];
   }

@@ -23,7 +23,7 @@ router.post(
 
 router.post("/login", loginValidation, validateRequest, authController.login);
 
-// ✅ New refresh token endpoint
+//  New refresh token endpoint
 router.post(
   "/refresh",
   refreshTokenValidation,
@@ -40,21 +40,21 @@ router.post(
   authController.resetPassword,
 );
 
-// ✅ Forgot Password with OTP endpoints
+//  Forgot Password with OTP endpoints
 router.post(
   "/forgot-password",
   forgotPasswordValidation,
   validateRequest,
   authController.forgotPassword,
 );
-
+//verify OTP endpoint
 router.post(
   "/verify-otp",
   verifyOTPValidation,
   validateRequest,
   authController.verifyOTP,
 );
-
+//reset password with OTP endpoint
 router.post(
   "/reset-password-otp",
   resetPasswordWithOTPValidation,
