@@ -7,7 +7,12 @@ import {
   UserResetPasswordDTO,
   AuthResponse,
   RefreshTokenDTO,
-} from "../models/user.model";
+  ForgotPasswordDTO,
+  VerifyOTPDTO,
+  ResetPasswordWithOTPDTO,
+} from "../dtos";
+import { EmailService } from "./email.service";
+import { otpService } from "./otp.service";
 
 interface TokenPayload {
   userId: string;
@@ -17,9 +22,11 @@ interface TokenPayload {
 
 export class AuthService {
   private userRepo: UserRepository;
+  private emailService: EmailService;
 
   constructor() {
     this.userRepo = new UserRepository();
+    this.emailService = new EmailService();
   }
 
   async register(data: UserRegisterDTO): Promise<AuthResponse> {
@@ -161,6 +168,76 @@ export class AuthService {
       throw new Error("Invalid token payload");
     } catch (error) {
       throw new Error("Invalid or expired access token");
+    }
+  }
+
+  // Forgot Password - Send OTP to email
+  async forgotPassword(data: ForgotPasswordDTO): Promise<{ message: string }> {
+    const user = await this.userRepo.findByEmail(data.email);
+    if (!user) {
+      // Don't reveal if email exists or not for security
+      return { message: "If the email exists, an OTP has been sent" };
+    }
+
+    // Check if there's already a valid OTP
+    if (otpService.hasValidOTP(data.email)) {
+      return {
+        message:
+          "An OTP has already been sent. Please check your email or wait for it to expire.",
+      };
+    }
+
+    // Generate and store OTP
+    const otp = otpService.generateOTP();
+    otpService.storeOTP(data.email, otp);
+
+    // Send OTP via email
+    await this.emailService.sendOTPEmail(data.email, otp, user.name);
+
+    return { message: "OTP has been sent to your email" };
+  }
+
+  // Verify OTP
+  async verifyOTP(
+    data: VerifyOTPDTO,
+  ): Promise<{ valid: boolean; message: string }> {
+    const user = await this.userRepo.findByEmail(data.email);
+    if (!user) {
+      return { valid: false, message: "Invalid email" };
+    }
+
+    // Just verify without consuming the OTP (for checking purpose)
+    const result = otpService.verifyOTP(data.email, data.otp);
+
+    // If valid, re-store the OTP so it can be used for password reset
+    if (result.valid) {
+      const otp = otpService.generateOTP();
+      otpService.storeOTP(data.email, data.otp);
+    }
+
+    return result;
+  }
+
+  // Reset Password with OTP
+  async resetPasswordWithOTP(data: ResetPasswordWithOTPDTO): Promise<void> {
+    const user = await this.userRepo.findByEmail(data.email);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Verify OTP (this will consume it)
+    const otpResult = otpService.verifyOTP(data.email, data.otp);
+    if (!otpResult.valid) {
+      throw new Error(otpResult.message);
+    }
+
+    // Update password
+    const updated = await this.userRepo.updatePassword(
+      data.email,
+      data.newPassword,
+    );
+    if (!updated) {
+      throw new Error("Failed to reset password");
     }
   }
 }

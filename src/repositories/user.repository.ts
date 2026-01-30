@@ -1,5 +1,6 @@
 import pool from "../config/database";
-import { User, UserRegisterDTO } from "../models/user.model";
+import { User } from "../entities";
+import { UserRegisterDTO } from "../dtos";
 
 export class UserRepository {
   async findByEmail(email: string): Promise<User | null> {

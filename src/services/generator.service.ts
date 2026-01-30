@@ -1,7 +1,11 @@
 import { GeneratorRepository } from "../repositories/generator.repository";
 import { geminiTextForPrompt } from "./gemini.client";
-import { FrameworkKey } from "../types/FrameworkKey";
-import { FrameworkConfig } from "../interface/FrameworkConfig";
+import {
+  FrameworkKey,
+  FrameworkConfig,
+  CreateApiDTO,
+  CreateApiConfigDTO,
+} from "../dtos";
 
 //type FrameworkKey = "react" | "angular" | "vue" | "php" | "nextjs";
 const FRAMEWORK_CONFIGS: Record<FrameworkKey, FrameworkConfig> = {
@@ -186,5 +190,138 @@ Additional rules:
       config_files,
     );
     return { ...row, suggested_path: suggestedPath };
+  }
+
+  // ==================== API CRUD ====================
+
+  async createApi(data: CreateApiDTO) {
+    return this.repo.createApi(data);
+  }
+
+  async getApiById(api_id: string) {
+    const api = await this.repo.getApiById(api_id);
+    if (!api) throw new Error("API not found");
+    return api;
+  }
+
+  async updateApi(api_id: string, data: Partial<CreateApiDTO>) {
+    const api = await this.repo.updateApi(api_id, data);
+    if (!api) throw new Error("API not found");
+    return api;
+  }
+
+  async deleteApi(api_id: string) {
+    const deleted = await this.repo.deleteApi(api_id);
+    if (!deleted) throw new Error("API not found");
+    return { message: "API deleted successfully" };
+  }
+
+  // ==================== API CONFIG ====================
+
+  async createApiConfig(data: CreateApiConfigDTO) {
+    // Check if API exists
+    const api = await this.repo.getApiById(data.api_id);
+    if (!api) throw new Error("API not found");
+    return this.repo.createApiConfig(data);
+  }
+
+  async getApiConfig(api_id: string) {
+    const config = await this.repo.getApiConfigByApiId(api_id);
+    if (!config) throw new Error("API Config not found");
+    return config;
+  }
+
+  async updateApiConfig(config_id: string, data: Partial<CreateApiConfigDTO>) {
+    const config = await this.repo.updateApiConfig(config_id, data);
+    if (!config) throw new Error("API Config not found");
+    return config;
+  }
+
+  // ==================== UI SCHEMA ====================
+
+  async getUISchemaById(schema_id: string) {
+    return this.repo.getUISchemaById(schema_id);
+  }
+
+  async listUISchemas() {
+    return this.repo.listUISchemas();
+  }
+
+  async deleteUISchema(schema_id: string) {
+    const deleted = await this.repo.deleteUISchema(schema_id);
+    if (!deleted) throw new Error("UI Schema not found");
+    return { message: "UI Schema deleted successfully" };
+  }
+
+  // ==================== GENERATED CODE ====================
+
+  async getGeneratedCodeById(code_id: string) {
+    return this.repo.getGeneratedCodeById(code_id);
+  }
+
+  async listGeneratedCodes() {
+    return this.repo.listGeneratedCodes();
+  }
+
+  async deleteGeneratedCode(code_id: string) {
+    const deleted = await this.repo.deleteGeneratedCode(code_id);
+    if (!deleted) throw new Error("Generated code not found");
+    return { message: "Generated code deleted successfully" };
+  }
+
+  // ==================== HISTORY ====================
+
+  async getGenerationHistory() {
+    return this.repo.getGenerationHistory();
+  }
+
+  // ==================== FULL GENERATE (One-click) ====================
+
+  async generateFull(data: {
+    api_id?: string;
+    api?: CreateApiDTO;
+    config?: Omit<CreateApiConfigDTO, "api_id">;
+    framework?: FrameworkKey;
+  }) {
+    let api_id = data.api_id;
+
+    // Step 1: Create API if not provided
+    if (!api_id && data.api) {
+      const newApi = await this.repo.createApi(data.api);
+      api_id = newApi.api_id;
+    }
+
+    if (!api_id) {
+      throw new Error("api_id or api data is required");
+    }
+
+    // Step 2: Create or get config
+    let config = await this.repo.getApiConfigByApiId(api_id);
+    if (!config && data.config) {
+      config = await this.repo.createApiConfig({ ...data.config, api_id });
+    }
+    if (!config) {
+      // Create default config
+      config = await this.repo.createApiConfig({ api_id });
+    }
+
+    // Step 3: Generate UI Schema
+    const uiSchema = await this.generateUiSchema(api_id);
+
+    // Step 4: Generate Code
+    const code = await this.generateCode(
+      uiSchema.schema_id,
+      data.framework || "react",
+    );
+
+    return {
+      api_id,
+      config_id: config.config_id,
+      schema_id: uiSchema.schema_id,
+      code_id: code.code_id,
+      frontend_code: code.frontend_code,
+      suggested_path: code.suggested_path,
+      framework: data.framework || "react",
+    };
   }
 }

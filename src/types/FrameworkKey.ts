@@ -1,1 +1,1 @@
-export type FrameworkKey = "react" | "angular" | "vue" | "php" | "nextjs";
+export type { FrameworkKey } from "../dtos";
