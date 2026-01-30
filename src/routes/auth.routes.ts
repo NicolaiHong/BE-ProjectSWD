@@ -6,6 +6,9 @@ import {
   loginValidation,
   refreshTokenValidation,
   resetPasswordValidation,
+  forgotPasswordValidation,
+  verifyOTPValidation,
+  resetPasswordWithOTPValidation,
   validateRequest,
 } from "../middlewares/validation";
 
@@ -35,6 +38,28 @@ router.post(
   resetPasswordValidation,
   validateRequest,
   authController.resetPassword,
+);
+
+// ✅ Forgot Password with OTP endpoints
+router.post(
+  "/forgot-password",
+  forgotPasswordValidation,
+  validateRequest,
+  authController.forgotPassword,
+);
+
+router.post(
+  "/verify-otp",
+  verifyOTPValidation,
+  validateRequest,
+  authController.verifyOTP,
+);
+
+router.post(
+  "/reset-password-otp",
+  resetPasswordWithOTPValidation,
+  validateRequest,
+  authController.resetPasswordWithOTP,
 );
 
 export default router;

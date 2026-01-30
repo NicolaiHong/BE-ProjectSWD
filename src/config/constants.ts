@@ -1,7 +1,7 @@
 import dotenv from "dotenv";
 
 dotenv.config();
-
+//JWT Tokens
 const jwtAccessToken = process.env.JWT_ACCESS_TOKEN;
 const jwtRefreshToken = process.env.JWT_REFRESH_TOKEN;
 
@@ -30,5 +30,18 @@ export const config = {
     refreshSecret: jwtRefreshToken,
     accessTokenExpiresIn: process.env.JWT_ACCESS_EXPIRES_IN || "15m",
     refreshTokenExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
+  },
+
+  email: {
+    host: process.env.EMAIL_HOST || "smtp.gmail.com",
+    port: parseInt(process.env.EMAIL_PORT || "587"),
+    secure: process.env.EMAIL_SECURE === "true",
+    user: process.env.EMAIL_USER || "",
+    password: process.env.EMAIL_PASSWORD || "",
+  },
+
+  otp: {
+    expiresInMinutes: parseInt(process.env.OTP_EXPIRES_MINUTES || "5"),
+    maxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS || "3"),
   },
 };
