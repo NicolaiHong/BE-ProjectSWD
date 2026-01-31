@@ -7,7 +7,7 @@
     "lib": ["ES2020"],
     "types": ["node"],
     "esModuleInterop": true,
-    "moduleResolution": "bundler",
+    "moduleResolution": "node",
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "sourceMap": true,
