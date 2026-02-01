@@ -35,13 +35,13 @@ export const config = {
   email: {
     host: process.env.EMAIL_HOST || "smtp.gmail.com",
     port: parseInt(process.env.EMAIL_PORT || "587"),
-    secure: process.env.EMAIL_SECURE === "true",
+    secure: process.env.EMAIL_SECURE === "",
     user: process.env.EMAIL_USER || "",
     password: process.env.EMAIL_PASSWORD || "",
   },
 
   otp: {
-    expiresInMinutes: parseInt(process.env.OTP_EXPIRES_MINUTES || "5"),
-    maxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS || "3"),
+    expiresInMinutes: parseInt(process.env.OTP_EXPIRES_MINUTES || ""),
+    maxAttempts: parseInt(process.env.OTP_MAX_ATTEMPTS || ""),
   },
 };
