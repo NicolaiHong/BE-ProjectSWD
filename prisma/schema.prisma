@@ -1,0 +1,111 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model developers {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email          String?          @db.Citext
+  display_name   String?
+  avatar_url     String?
+  created_at     DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime         @default(now()) @db.Timestamptz(6)
+  oauth_accounts oauth_accounts[]
+  projects       projects[]
+}
+
+model generation_sessions {
+  id                   String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id           String     @db.Uuid
+  provider             String
+  model                String
+  status               gen_status @default(QUEUED)
+  error_message        String?
+  openapi_sha256       String?
+  entity_schema_sha256 String?
+  action_spec_sha256   String?
+  design_system_sha256 String?
+  output_summary_md    String?
+  repo_commit_sha      String?
+  pr_url               String?
+  vercel_deploy_url    String?
+  created_at           DateTime   @default(now()) @db.Timestamptz(6)
+  finished_at          DateTime?  @db.Timestamptz(6)
+  projects             projects   @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([created_at], map: "ix_gen_sessions_created_at")
+  @@index([project_id], map: "ix_gen_sessions_project")
+  @@index([status], map: "ix_gen_sessions_status")
+}
+
+model oauth_accounts {
+  id               String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  developer_id     String         @db.Uuid
+  provider         oauth_provider
+  provider_user_id String
+  email            String?        @db.Citext
+  created_at       DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime       @default(now()) @db.Timestamptz(6)
+  developers       developers     @relation(fields: [developer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([provider, provider_user_id], map: "ux_oauth_provider_user")
+  @@index([developer_id], map: "ix_oauth_accounts_dev")
+}
+
+model projects {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  developer_id        String                @db.Uuid
+  name                String
+  description         String?
+  repo_url            String?
+  default_branch      String?
+  vercel_project_id   String?
+  created_at          DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime              @default(now()) @db.Timestamptz(6)
+  generation_sessions generation_sessions[]
+  project_documents   project_documents[]
+  developers          developers            @relation(fields: [developer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([developer_id, name], map: "ux_project_owner_name")
+  @@index([developer_id], map: "ix_projects_dev")
+}
+
+model project_documents {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id   String        @db.Uuid
+  type         document_type
+  name         String
+  content_type String?
+  content      String
+  sha256       String
+  updated_at   DateTime      @default(now()) @db.Timestamptz(6)
+  projects     projects      @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([project_id, type], map: "ux_project_doc_type")
+  @@index([project_id], map: "ix_project_documents_project")
+  @@index([sha256], map: "ix_project_documents_sha")
+  @@index([type], map: "ix_project_documents_type")
+}
+
+enum gen_status {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum oauth_provider {
+  GOOGLE
+  GITHUB
+}
+
+enum document_type {
+  OPENAPI
+  ENTITY_SCHEMA
+  ACTION_SPEC
+  DESIGN_SYSTEM
+}

@@ -1,119 +1,113 @@
--- ============================================
--- SIMPLE AI ADMIN GENERATOR - FINAL SCHEMA
--- Scope: Use AI API (NO training)
--- ============================================
+BEGIN;
 
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS citext;
 
--- ============================================
--- RESET DATABASE
--- ============================================
-DROP TABLE IF EXISTS deployment CASCADE;
-DROP TABLE IF EXISTS generated_code CASCADE;
-DROP TABLE IF EXISTS ui_schema CASCADE;
-DROP TABLE IF EXISTS api_config CASCADE;
-DROP TABLE IF EXISTS api CASCADE;
-DROP TABLE IF EXISTS "user" CASCADE;
+-- ===== Enums =====
+DO $$ BEGIN
+  CREATE TYPE oauth_provider AS ENUM ('GOOGLE', 'GITHUB');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- ============================================
--- USER (ADMIN LOGIN)
--- ============================================
-CREATE TABLE "user" (
-  user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(255) NOT NULL,
-  email VARCHAR(255) UNIQUE NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
-  role VARCHAR(50) DEFAULT 'admin',
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+DO $$ BEGIN
+  CREATE TYPE document_type AS ENUM ('OPENAPI', 'ENTITY_SCHEMA', 'ACTION_SPEC', 'DESIGN_SYSTEM');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE gen_status AS ENUM ('QUEUED', 'RUNNING', 'SUCCEEDED', 'FAILED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ===== Developers + OAuth (identity only) =====
+CREATE TABLE IF NOT EXISTS developers (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  email         citext NULL,
+  display_name  text NULL,
+  avatar_url    text NULL,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
 );
 
--- ============================================
--- API (CHỌN API ĐỂ SINH GIAO DIỆN)
--- ============================================
-CREATE TABLE api (
-  api_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name VARCHAR(255) NOT NULL,        -- VD: Product API
-  method VARCHAR(10) NOT NULL,       -- GET, POST, PUT, DELETE
-  endpoint TEXT NOT NULL,            -- /api/products
-  description TEXT,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE UNIQUE INDEX IF NOT EXISTS ux_developers_email_not_null
+  ON developers(email) WHERE email IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS oauth_accounts (
+  id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  developer_id     uuid NOT NULL REFERENCES developers(id) ON DELETE CASCADE,
+  provider         oauth_provider NOT NULL,
+  provider_user_id text NOT NULL,
+  email            citext NULL,
+  created_at       timestamptz NOT NULL DEFAULT now(),
+  updated_at       timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ux_oauth_provider_user UNIQUE (provider, provider_user_id)
 );
 
--- ============================================
--- API CONFIG (CẤU HÌNH SINH UI)
--- ============================================
-CREATE TABLE api_config (
-  config_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  api_id UUID NOT NULL REFERENCES api(api_id) ON DELETE CASCADE,
+CREATE INDEX IF NOT EXISTS ix_oauth_accounts_dev ON oauth_accounts(developer_id);
 
-  auth_required BOOLEAN DEFAULT FALSE,
-  pagination BOOLEAN DEFAULT TRUE,
-  searchable BOOLEAN DEFAULT TRUE,
+-- ===== Projects (FE Admin CRUD generation unit) =====
+CREATE TABLE IF NOT EXISTS projects (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  developer_id  uuid NOT NULL REFERENCES developers(id) ON DELETE CASCADE,
+  name          text NOT NULL,
+  description   text NULL,
 
-  columns JSONB,                     -- field hiển thị
-  filters JSONB,                     -- field filter
+  -- Git + Vercel friendly (optional but useful)
+  repo_url      text NULL,     -- https://github.com/org/repo
+  default_branch text NULL,    -- main/master
+  vercel_project_id text NULL, -- nếu bạn muốn lưu mapping sau này
 
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ux_project_owner_name UNIQUE (developer_id, name)
 );
 
--- ============================================
--- UI SCHEMA (GIAO DIỆN QUẢN LÝ DO AI SINH)
--- ============================================
-CREATE TABLE ui_schema (
-  schema_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  config_id UUID NOT NULL REFERENCES api_config(config_id) ON DELETE CASCADE,
+CREATE INDEX IF NOT EXISTS ix_projects_dev ON projects(developer_id);
 
-  schema_json JSONB NOT NULL,         -- layout, form, table
-  description TEXT,
+-- ===== Documents: 4 file inputs (OpenAPI, EntitySchema, ActionSpec, DesignSystem) =====
+-- Tối giản: mỗi loại doc 1 bản "current". Nếu muốn versioning sau này thì thêm table versions.
+CREATE TABLE IF NOT EXISTS project_documents (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id    uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  type          document_type NOT NULL,
+  name          text NOT NULL,          -- openapi.json, entities.json, actions.json, design-system.json
+  content_type  text NULL,              -- application/json, text/yaml
+  content       text NOT NULL,          -- giữ simple: lưu thẳng text/json/yaml
+  sha256        text NOT NULL,
+  updated_at    timestamptz NOT NULL DEFAULT now(),
 
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  CONSTRAINT ux_project_doc_type UNIQUE (project_id, type)
 );
 
--- ============================================
--- GENERATED CODE (CODE SINH RA)
--- ============================================
-CREATE TABLE generated_code (
-  code_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  schema_id UUID NOT NULL REFERENCES ui_schema(schema_id) ON DELETE CASCADE,
+CREATE INDEX IF NOT EXISTS ix_project_documents_project ON project_documents(project_id);
+CREATE INDEX IF NOT EXISTS ix_project_documents_type ON project_documents(type);
+CREATE INDEX IF NOT EXISTS ix_project_documents_sha ON project_documents(sha256);
 
-  frontend_code TEXT,                 -- React / Vue
-  backend_code TEXT,                  -- optional
-  config_files JSONB,                 -- package.json, env
+-- ===== Generation sessions (history) =====
+CREATE TABLE IF NOT EXISTS generation_sessions (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  project_id    uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
 
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  provider      text NOT NULL,          -- OPENAI/GEMINI/PERPLEXITY
+  model         text NOT NULL,
+  status        gen_status NOT NULL DEFAULT 'QUEUED',
+  error_message text NULL,
+
+  -- snapshot input hashes (đủ để trace)
+  openapi_sha256       text NULL,
+  entity_schema_sha256 text NULL,
+  action_spec_sha256   text NULL,
+  design_system_sha256 text NULL,
+
+  -- output
+  output_summary_md text NULL,
+  repo_commit_sha   text NULL,
+  pr_url            text NULL,
+  vercel_deploy_url text NULL,
+
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  finished_at   timestamptz NULL
 );
 
--- ============================================
--- DEPLOYMENT (PUSH GIT / DEPLOY)
--- ============================================
-CREATE TABLE deployment (
-  deployment_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  code_id UUID NOT NULL REFERENCES generated_code(code_id) ON DELETE CASCADE,
+CREATE INDEX IF NOT EXISTS ix_gen_sessions_project ON generation_sessions(project_id);
+CREATE INDEX IF NOT EXISTS ix_gen_sessions_status ON generation_sessions(status);
+CREATE INDEX IF NOT EXISTS ix_gen_sessions_created_at ON generation_sessions(created_at);
 
-  repo_url TEXT,                      -- GitHub repo
-  branch VARCHAR(100) DEFAULT 'main',
-  status VARCHAR(50) DEFAULT 'pending', -- pending, success, failed
-
-  deployed_at TIMESTAMP,
-  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- ============================================
--- INDEXES
--- ============================================
-CREATE INDEX idx_user_email ON "user"(email);
-CREATE INDEX idx_api_method ON api(method);
-CREATE INDEX idx_api_config_api ON api_config(api_id);
-CREATE INDEX idx_ui_schema_config ON ui_schema(config_id);
-CREATE INDEX idx_generated_code_schema ON generated_code(schema_id);
-CREATE INDEX idx_deployment_code ON deployment(code_id);
-
--- ============================================
--- SAMPLE ADMIN ACCOUNT
--- ============================================
-INSERT INTO "user" (name, email, password_hash)
-VALUES (
-  'Admin',
-  'admin@example.com',
-  crypt('admin123', gen_salt('bf'))
-);
+COMMIT;
