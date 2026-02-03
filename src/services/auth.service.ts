@@ -1,243 +1,140 @@
-import jwt, { JwtPayload } from "jsonwebtoken";
-import { config } from "../config/constants";
-import { UserRepository } from "../repositories/user.repository";
+import { AuthRepository } from "../repositories/auth.repository";
+import { hashPassword, verifyPassword } from "../utils/password";
+import { sha256 } from "../utils/tokenHash";
 import {
-  UserRegisterDTO,
-  UserLoginDTO,
-  UserResetPasswordDTO,
-  AuthResponse,
-  RefreshTokenDTO,
-  ForgotPasswordDTO,
-  VerifyOTPDTO,
-  ResetPasswordWithOTPDTO,
-} from "../dtos";
-import { EmailService } from "./email.service";
-import { otpService } from "./otp.service";
+  signAccessToken,
+  signRefreshToken,
+  verifyRefreshToken,
+} from "../utils/jwt";
 
-interface TokenPayload {
-  userId: string;
-  email: string;
-  role: string;
+function computeRefreshExpiry() {
+  // match JWT_REFRESH_TTL: cho 30 days
+  const d = new Date();
+  d.setDate(d.getDate() + 30);
+  return d;
 }
 
 export class AuthService {
-  private userRepo: UserRepository;
-  private emailService: EmailService;
+  static async register(email: string, password: string, displayName?: string) {
+    const existed = await AuthRepository.findDeveloperByEmail(email);
+    if (existed) throw new Error("EMAIL_ALREADY_USED");
 
-  constructor() {
-    this.userRepo = new UserRepository();
-    this.emailService = new EmailService();
-  }
-
-  async register(data: UserRegisterDTO): Promise<AuthResponse> {
-    const existingUser = await this.userRepo.findByEmail(data.email);
-    if (existingUser) {
-      throw new Error("Email already registered");
-    }
-
-    const user = await this.userRepo.create(data);
-    return this.generateAuthResponse(
-      user.user_id,
-      user.email,
-      user.role,
-      user.name,
-    );
-  }
-
-  async login(data: UserLoginDTO): Promise<AuthResponse> {
-    const user = await this.userRepo.verifyPassword(data.email, data.password);
-    if (!user) {
-      throw new Error("Invalid email or password");
-    }
-
-    return this.generateAuthResponse(
-      user.user_id,
-      user.email,
-      user.role,
-      user.name,
-    );
-  }
-
-  async refreshToken(data: RefreshTokenDTO): Promise<AuthResponse> {
-    try {
-      // Verify refresh token
-      const decoded = jwt.verify(
-        data.refresh_token,
-        config.jwt.refreshSecret,
-      ) as JwtPayload & TokenPayload;
-
-      // Check user still exists
-      const user = await this.userRepo.findById(decoded.userId);
-      if (!user) {
-        throw new Error("User not found");
-      }
-
-      // Generate new tokens
-      return this.generateAuthResponse(
-        user.user_id,
-        user.email,
-        user.role,
-        user.name,
-      );
-    } catch (error) {
-      throw new Error("Invalid or expired refresh token");
-    }
-  }
-
-  async resetPassword(data: UserResetPasswordDTO): Promise<void> {
-    const user = await this.userRepo.findByEmail(data.email);
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    const updated = await this.userRepo.updatePassword(
-      data.email,
-      data.newPassword,
-    );
-    if (!updated) {
-      throw new Error("Failed to reset password");
-    }
-  }
-
-  private generateAuthResponse(
-    userId: string,
-    email: string,
-    role: string,
-    name: string,
-  ): AuthResponse {
-    const payload: TokenPayload = { userId, email, role };
-
-    const access_token = jwt.sign(payload, config.jwt.secret, {
-      expiresIn: config.jwt.accessTokenExpiresIn,
+    const password_hash = await hashPassword(password);
+    const dev = await AuthRepository.createDeveloper({
+      email,
+      password_hash,
+      display_name: displayName ?? null,
     });
 
-    const refresh_token = jwt.sign(payload, config.jwt.refreshSecret, {
-      expiresIn: config.jwt.refreshTokenExpiresIn,
+    return this.issueTokens(dev.id);
+  }
+
+  static async login(email: string, password: string) {
+    const dev = await AuthRepository.findDeveloperByEmail(email);
+    if (!dev || !dev.password_hash) throw new Error("INVALID_CREDENTIALS");
+
+    const ok = await verifyPassword(password, dev.password_hash);
+    if (!ok) throw new Error("INVALID_CREDENTIALS");
+
+    return this.issueTokens(dev.id);
+  }
+
+  static async loginOAuth(payload: {
+    provider: "GOOGLE" | "GITHUB";
+    providerUserId: string;
+    email?: string | null;
+    displayName?: string | null;
+    avatarUrl?: string | null;
+  }) {
+    const linked = await AuthRepository.findOAuthAccount(
+      payload.provider,
+      payload.providerUserId,
+    );
+    if (linked) return this.issueTokens(linked.developer_id);
+
+    // link by email if exists
+    let dev = payload.email
+      ? await AuthRepository.findDeveloperByEmail(payload.email)
+      : null;
+
+    // create dev without password (OAuth-only)
+    if (!dev) {
+      // create with random password_hash to satisfy NOT NULL? (trong schema bạn để NULL ok)
+      dev = await AuthRepository.createDeveloper({
+        email:
+          payload.email ??
+          `${payload.providerUserId}@${payload.provider.toLowerCase()}.oauth.local`,
+        password_hash: await hashPassword(cryptoRandom()),
+        display_name: payload.displayName ?? null,
+      });
+    } else {
+      await AuthRepository.updateDeveloperProfile(dev.id, {
+        display_name: payload.displayName ?? dev.display_name,
+        avatar_url: payload.avatarUrl ?? dev.avatar_url,
+      });
+    }
+
+    await AuthRepository.createOAuthAccount(
+      dev.id,
+      payload.provider,
+      payload.providerUserId,
+      payload.email ?? null,
+    );
+    return this.issueTokens(dev.id);
+  }
+
+  static async refresh(refreshToken: string) {
+    const decoded = verifyRefreshToken(refreshToken);
+    const tokenId = decoded.jti;
+
+    const record = await AuthRepository.findRefreshTokenById(tokenId);
+    if (!record) throw new Error("REFRESH_NOT_FOUND");
+    if (record.revoked_at) throw new Error("REFRESH_REVOKED");
+    if (record.expires_at.getTime() < Date.now())
+      throw new Error("REFRESH_EXPIRED");
+
+    // verify hash matches
+    const inputHash = sha256(refreshToken);
+    if (inputHash !== record.token_hash) throw new Error("REFRESH_INVALID");
+
+    // rotate: revoke old and issue new
+    await AuthRepository.revokeRefreshToken(record.id);
+    return this.issueTokens(decoded.sub);
+  }
+
+  static async logout(refreshToken: string) {
+    const decoded = verifyRefreshToken(refreshToken);
+    const record = await AuthRepository.findRefreshTokenById(decoded.jti);
+    if (record && !record.revoked_at)
+      await AuthRepository.revokeRefreshToken(record.id);
+  }
+
+  static async issueTokens(developerId: string) {
+    const accessToken = signAccessToken(developerId);
+
+    // create refresh token record first
+    const expiresAt = computeRefreshExpiry();
+    const record = await AuthRepository.createRefreshTokenRecord(
+      developerId,
+      "PENDING",
+      expiresAt,
+    );
+
+    const refreshToken = signRefreshToken(developerId, record.id);
+    const token_hash = sha256(refreshToken);
+
+    // update hash (2-step vì cần record.id làm jti)
+    await (
+      await import("../clients/prisma")
+    ).prisma.refresh_tokens.update({
+      where: { id: record.id },
+      data: { token_hash },
     });
 
-    // Calculate expires_in in seconds
-    const expiresIn = this.parseExpiration(config.jwt.accessTokenExpiresIn);
-
-    return {
-      access_token,
-      refresh_token,
-      token_type: "Bearer",
-      expires_in: expiresIn,
-      user: {
-        user_id: userId,
-        name,
-        email,
-        role,
-      },
-    };
+    return { accessToken, refreshToken };
   }
+}
 
-  private parseExpiration(expiration: string): number {
-    const match = expiration.match(/^(\d+)([smhd])$/);
-    if (!match) return 900; // default 15 minutes
-
-    const value = parseInt(match[1]);
-    const unit = match[2];
-
-    switch (unit) {
-      case "s":
-        return value;
-      case "m":
-        return value * 60;
-      case "h":
-        return value * 60 * 60;
-      case "d":
-        return value * 60 * 60 * 24;
-      default:
-        return 900;
-    }
-  }
-
-  verifyAccessToken(token: string): TokenPayload {
-    try {
-      const decoded = jwt.verify(token, config.jwt.secret);
-
-      if (
-        typeof decoded === "object" &&
-        decoded !== null &&
-        "userId" in decoded
-      ) {
-        return decoded as JwtPayload & TokenPayload;
-      }
-
-      throw new Error("Invalid token payload");
-    } catch (error) {
-      throw new Error("Invalid or expired access token");
-    }
-  }
-
-  // Forgot Password - Send OTP to email
-  async forgotPassword(data: ForgotPasswordDTO): Promise<{ message: string }> {
-    const user = await this.userRepo.findByEmail(data.email);
-    if (!user) {
-      // Don't reveal if email exists or not for security
-      return { message: "If the email exists, an OTP has been sent" };
-    }
-
-    // Check if there's already a valid OTP
-    if (otpService.hasValidOTP(data.email)) {
-      return {
-        message:
-          "An OTP has already been sent. Please check your email or wait for it to expire.",
-      };
-    }
-
-    // Generate and store OTP
-    const otp = otpService.generateOTP();
-    otpService.storeOTP(data.email, otp);
-
-    // Send OTP via email
-    await this.emailService.sendOTPEmail(data.email, otp, user.name);
-
-    return { message: "OTP has been sent to your email" };
-  }
-
-  // Verify OTP
-  async verifyOTP(
-    data: VerifyOTPDTO,
-  ): Promise<{ valid: boolean; message: string }> {
-    const user = await this.userRepo.findByEmail(data.email);
-    if (!user) {
-      return { valid: false, message: "Invalid email" };
-    }
-
-    // Just verify without consuming the OTP (for checking purpose)
-    const result = otpService.verifyOTP(data.email, data.otp);
-
-    // If valid, re-store the OTP so it can be used for password reset
-    if (result.valid) {
-      const otp = otpService.generateOTP();
-      otpService.storeOTP(data.email, data.otp);
-    }
-
-    return result;
-  }
-
-  // Reset Password with OTP
-  async resetPasswordWithOTP(data: ResetPasswordWithOTPDTO): Promise<void> {
-    const user = await this.userRepo.findByEmail(data.email);
-    if (!user) {
-      throw new Error("User not found");
-    }
-
-    // Verify OTP (this will consume it)
-    const otpResult = otpService.verifyOTP(data.email, data.otp);
-    if (!otpResult.valid) {
-      throw new Error(otpResult.message);
-    }
-
-    // Update password
-    const updated = await this.userRepo.updatePassword(
-      data.email,
-      data.newPassword,
-    );
-    if (!updated) {
-      throw new Error("Failed to reset password");
-    }
-  }
+function cryptoRandom() {
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }

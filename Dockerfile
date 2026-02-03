@@ -1,7 +1,7 @@
 # ============================================
 # Stage 1: Base - Production dependencies
 # ============================================
-FROM node:18-alpine AS base
+FROM node:20-alpine AS base
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ RUN npm ci --only=production && \
 # ============================================
 # Stage 2: Development
 # ============================================
-FROM node:18-alpine AS development
+FROM node:20-alpine AS development
 
 WORKDIR /app
 
@@ -37,7 +37,7 @@ CMD ["npm", "run", "dev"]
 # ============================================
 # Stage 3: Builder - Compile TypeScript
 # ============================================
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
@@ -56,7 +56,7 @@ RUN npm run build
 # ============================================
 # Stage 4: Production
 # ============================================
-FROM node:18-alpine AS production
+FROM node:20-alpine AS production
 
 WORKDIR /app
 
