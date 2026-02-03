@@ -6,55 +6,101 @@ import {
   signRefreshToken,
   verifyRefreshToken,
 } from "../utils/jwt";
+import { ConflictError, UnauthorizedError } from "../middlewares/errorHandler";
+import type {
+  OAuthProfile,
+  AuthRegisterResponse,
+  AuthLoginResponse,
+  AuthTokensResponse,
+} from "../dtos";
 
 function computeRefreshExpiry() {
-  // match JWT_REFRESH_TTL: cho 30 days
   const d = new Date();
   d.setDate(d.getDate() + 30);
   return d;
 }
 
 export class AuthService {
-  static async register(email: string, password: string, displayName?: string) {
-    const existed = await AuthRepository.findDeveloperByEmail(email);
-    if (existed) throw new Error("EMAIL_ALREADY_USED");
+  static async register(
+    email: string,
+    password: string,
+    displayName?: string,
+  ): Promise<AuthRegisterResponse> {
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const existed = await AuthRepository.findDeveloperByEmail(normalizedEmail);
+    if (existed) throw ConflictError("EMAIL_ALREADY_USED");
 
     const password_hash = await hashPassword(password);
     const dev = await AuthRepository.createDeveloper({
-      email,
+      email: normalizedEmail,
       password_hash,
       display_name: displayName ?? null,
     });
 
-    return this.issueTokens(dev.id);
+    const tokens = await this.issueTokens(dev.id);
+    return {
+      user: {
+        id: dev.id,
+        email: dev.email,
+        displayName: dev.display_name,
+        avatarUrl: dev.avatar_url,
+      },
+      tokens,
+    };
   }
 
-  static async login(email: string, password: string) {
-    const dev = await AuthRepository.findDeveloperByEmail(email);
-    if (!dev || !dev.password_hash) throw new Error("INVALID_CREDENTIALS");
+  static async login(
+    emailOrUsername: string,
+    password: string,
+  ): Promise<AuthLoginResponse> {
+    const normalizedInput = emailOrUsername.toLowerCase().trim();
+
+    const dev = await AuthRepository.findDeveloperByEmail(normalizedInput);
+
+    if (!dev || !dev.password_hash)
+      throw UnauthorizedError("INVALID_CREDENTIALS");
 
     const ok = await verifyPassword(password, dev.password_hash);
-    if (!ok) throw new Error("INVALID_CREDENTIALS");
+    if (!ok) throw UnauthorizedError("INVALID_CREDENTIALS");
 
-    return this.issueTokens(dev.id);
+    const tokens = await this.issueTokens(dev.id);
+    return {
+      user: {
+        id: dev.id,
+        email: dev.email,
+        displayName: dev.display_name,
+        avatarUrl: dev.avatar_url,
+      },
+      tokens,
+    };
   }
 
-  static async loginOAuth(payload: {
-    provider: "GOOGLE" | "GITHUB";
-    providerUserId: string;
-    email?: string | null;
-    displayName?: string | null;
-    avatarUrl?: string | null;
-  }) {
+  static async loginOAuth(payload: OAuthProfile): Promise<AuthLoginResponse> {
     const linked = await AuthRepository.findOAuthAccount(
       payload.provider,
       payload.providerUserId,
     );
-    if (linked) return this.issueTokens(linked.developer_id);
+    if (linked) {
+      const dev = await AuthRepository.findDeveloperById(linked.developer_id);
+      const tokens = await this.issueTokens(linked.developer_id);
+      return {
+        user: {
+          id: linked.developer_id,
+          email: dev?.email ?? null,
+          displayName: dev?.display_name ?? null,
+          avatarUrl: dev?.avatar_url ?? null,
+        },
+        tokens,
+      };
+    }
+
+    // Normalize email if present
+    const normalizedEmail = payload.email?.toLowerCase().trim() ?? null;
 
     // link by email if exists
-    let dev = payload.email
-      ? await AuthRepository.findDeveloperByEmail(payload.email)
+    let dev = normalizedEmail
+      ? await AuthRepository.findDeveloperByEmail(normalizedEmail)
       : null;
 
     // create dev without password (OAuth-only)
@@ -62,7 +108,7 @@ export class AuthService {
       // create with random password_hash to satisfy NOT NULL? (trong schema bạn để NULL ok)
       dev = await AuthRepository.createDeveloper({
         email:
-          payload.email ??
+          normalizedEmail ??
           `${payload.providerUserId}@${payload.provider.toLowerCase()}.oauth.local`,
         password_hash: await hashPassword(cryptoRandom()),
         display_name: payload.displayName ?? null,
@@ -78,38 +124,47 @@ export class AuthService {
       dev.id,
       payload.provider,
       payload.providerUserId,
-      payload.email ?? null,
+      normalizedEmail,
     );
-    return this.issueTokens(dev.id);
+
+    const tokens = await this.issueTokens(dev.id);
+    return {
+      user: {
+        id: dev.id,
+        email: dev.email,
+        displayName: dev.display_name,
+        avatarUrl: dev.avatar_url,
+      },
+      tokens,
+    };
   }
 
-  static async refresh(refreshToken: string) {
+  static async refresh(refreshToken: string): Promise<AuthTokensResponse> {
     const decoded = verifyRefreshToken(refreshToken);
     const tokenId = decoded.jti;
 
     const record = await AuthRepository.findRefreshTokenById(tokenId);
-    if (!record) throw new Error("REFRESH_NOT_FOUND");
-    if (record.revoked_at) throw new Error("REFRESH_REVOKED");
+    if (!record) throw UnauthorizedError("REFRESH_NOT_FOUND");
+    if (record.revoked_at) throw UnauthorizedError("REFRESH_REVOKED");
     if (record.expires_at.getTime() < Date.now())
-      throw new Error("REFRESH_EXPIRED");
+      throw UnauthorizedError("REFRESH_EXPIRED");
 
-    // verify hash matches
     const inputHash = sha256(refreshToken);
-    if (inputHash !== record.token_hash) throw new Error("REFRESH_INVALID");
+    if (inputHash !== record.token_hash)
+      throw UnauthorizedError("REFRESH_INVALID");
 
-    // rotate: revoke old and issue new
     await AuthRepository.revokeRefreshToken(record.id);
     return this.issueTokens(decoded.sub);
   }
 
-  static async logout(refreshToken: string) {
+  static async logout(refreshToken: string): Promise<void> {
     const decoded = verifyRefreshToken(refreshToken);
     const record = await AuthRepository.findRefreshTokenById(decoded.jti);
     if (record && !record.revoked_at)
       await AuthRepository.revokeRefreshToken(record.id);
   }
 
-  static async issueTokens(developerId: string) {
+  static async issueTokens(developerId: string): Promise<AuthTokensResponse> {
     const accessToken = signAccessToken(developerId);
 
     // create refresh token record first
