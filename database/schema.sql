@@ -111,3 +111,20 @@ CREATE INDEX IF NOT EXISTS ix_gen_sessions_status ON generation_sessions(status)
 CREATE INDEX IF NOT EXISTS ix_gen_sessions_created_at ON generation_sessions(created_at);
 
 COMMIT;
+
+-- 1) add password_hash cho login/register thường
+ALTER TABLE developers
+  ADD COLUMN IF NOT EXISTS password_hash text NULL;
+
+-- 2) refresh tokens table để logout/revoke
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  developer_id  uuid NOT NULL REFERENCES developers(id) ON DELETE CASCADE,
+  token_hash    text NOT NULL UNIQUE,
+  revoked_at    timestamptz NULL,
+  expires_at    timestamptz NOT NULL,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_refresh_tokens_dev ON refresh_tokens(developer_id);
+CREATE INDEX IF NOT EXISTS ix_refresh_tokens_expires ON refresh_tokens(expires_at);
