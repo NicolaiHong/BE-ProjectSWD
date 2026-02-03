@@ -3,10 +3,10 @@ services:
     build:
       target: development
     volumes:
-      - ./src:/app/src # ✅ Mount src/
-      - ./nodemon.json:/app/nodemon.json # ✅ Mount nodemon config
-      - /app/node_modules # ✅ Preserve node_modules
-      - /app/dist # ✅ Không overwrite dist/
+      - ./src:/app/src
+      - ./nodemon.json:/app/nodemon.json
+      - /app/node_modules
+      - /app/dist
     command: npm run dev
     environment:
       NODE_ENV: development

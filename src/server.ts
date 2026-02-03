@@ -1,0 +1,65 @@
+import express from "express";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import morgan from "morgan";
+import swaggerUi from "swagger-ui-express";
+
+import { config } from "./config/constants";
+import { swaggerSpec } from "./config/swagger";
+import { passport } from "./config/passport";
+
+import { authRouter } from "./routes/auth.routes";
+import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
+
+const app = express();
+
+// Request logging
+app.use(morgan("dev"));
+
+// CORS (mở cho dev; production thì set origin cụ thể)
+app.use(
+  cors({
+    origin: [
+      "http://localhost:3001",
+      "http://localhost:3000",
+      "http://localhost:5173",
+      "http://localhost:8080",
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }),
+);
+
+// Body + cookies
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+// Passport (OAuth)
+app.use(passport.initialize());
+
+// Swagger
+app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// Health
+app.get("/health", (_req, res) => {
+  res.json({ ok: true, timestamp: new Date().toISOString() });
+});
+
+// Routes
+app.use("/auth", authRouter);
+
+// 404 Handler - phải đặt sau tất cả routes
+app.use(notFoundHandler);
+
+// Global Error Handler - phải đặt cuối cùng
+app.use(errorHandler);
+
+app.listen(config.port, () => {
+  console.log(`Server http://localhost:${config.port}`);
+  console.log(`Swagger http://localhost:${config.port}/docs`);
+  console.log(`Health  http://localhost:${config.port}/health`);
+});
+
+export default app;
