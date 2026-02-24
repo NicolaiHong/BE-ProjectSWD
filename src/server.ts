@@ -16,10 +16,8 @@ import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 
 const app = express();
 
-// Request logging
 app.use(morgan("dev"));
 
-// CORS (mở cho dev; production thì set origin cụ thể)
 app.use(
   cors({
     origin: [
@@ -34,32 +32,24 @@ app.use(
   }),
 );
 
-// Body + cookies
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// Passport (OAuth)
 app.use(passport.initialize());
 
-// Swagger
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Health
 app.get("/health", (_req, res) => {
   res.json({ ok: true, timestamp: new Date().toISOString() });
 });
 
-// Routes
 app.use("/auth", authRouter);
 app.use("/api/projects", projectRouter);
 app.use("/api/projects", documentRouter);
 app.use("/api/projects", sessionRouter);
 
-// 404 Handler - phải đặt sau tất cả routes
 app.use(notFoundHandler);
-
-// Global Error Handler - phải đặt cuối cùng
 app.use(errorHandler);
 
 app.listen(config.port, () => {

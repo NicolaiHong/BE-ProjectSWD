@@ -6,7 +6,6 @@ import type { document_type } from "../generated/prisma";
 import type { UpsertDocumentRequest } from "../dtos/DocumentDtos";
 
 export class DocumentService {
-  /** Verify project ownership and return the project */
   private static async verifyOwnership(projectId: string, developerId: string) {
     const project = await ProjectRepository.findById(projectId);
     if (!project) throw NotFoundError("Project not found");

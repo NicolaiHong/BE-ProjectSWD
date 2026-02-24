@@ -30,7 +30,6 @@ export class SessionService {
     const session = await SessionRepository.findById(sessionId);
     if (!session) throw NotFoundError("Session not found");
 
-    // verify ownership through project
     await this.verifyOwnership(session.project_id, developerId);
     return session;
   }
@@ -42,7 +41,6 @@ export class SessionService {
   ) {
     const project = await this.verifyOwnership(projectId, developerId);
 
-    // Validate all 4 document types exist
     const docs = await DocumentRepository.listByProject(projectId);
     const docTypes = docs.map((d) => d.type);
     const requiredTypes = [
@@ -58,13 +56,11 @@ export class SessionService {
       );
     }
 
-    // Build sha256 snapshot
     const shaMap: Record<string, string | null> = {};
     for (const doc of docs) {
       shaMap[doc.type] = doc.sha256;
     }
 
-    // Create session as QUEUED
     const session = await SessionRepository.create({
       project_id: projectId,
       provider: data.provider,
@@ -75,7 +71,6 @@ export class SessionService {
       design_system_sha256: shaMap["DESIGN_SYSTEM"] ?? null,
     });
 
-    // Trigger orchestrator asynchronously (fire-and-forget)
     this.executeGeneration(session.id, project, docs, data).catch((err) => {
       console.error(`[SessionService] Async generation failed for session ${session.id}:`, err);
     });
@@ -90,14 +85,11 @@ export class SessionService {
     data: RunGenerationRequest,
   ) {
     try {
-      // Update status to RUNNING
       await SessionRepository.updateStatus(sessionId, "RUNNING");
 
-      // Dynamically import the orchestrator to avoid circular deps
       const { Orchestrator } = await import("../ai/orchestrator");
       const result = await Orchestrator.run(sessionId, project, docs, data);
 
-      // Set output and mark SUCCEEDED
       await SessionRepository.setOutput(sessionId, {
         output_summary_md: result.summary_md,
         repo_commit_sha: result.commit_sha ?? null,
