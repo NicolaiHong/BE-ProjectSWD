@@ -25,4 +25,11 @@ export const config = {
 
   // Frontend URL (for OAuth redirect)
   frontendUrl: process.env.FRONTEND_URL || "http://localhost:3000",
+
+  // AI Provider
+  openaiApiKey: process.env.OPENAI_API_KEY || "",
+  openaiBaseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
+
+  // Workspace root for code generation output
+  workspaceRoot: process.env.WORKSPACE_ROOT || "/tmp/workspaces",
 };
