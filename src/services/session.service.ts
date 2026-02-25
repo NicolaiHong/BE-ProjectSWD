@@ -87,7 +87,7 @@ export class SessionService {
     try {
       await SessionRepository.updateStatus(sessionId, "RUNNING");
 
-      const { Orchestrator } = await import("../ai/orchestrator.js");
+      const { Orchestrator } = await import("../ai/orchestrator");
       const result = await Orchestrator.run(sessionId, project, docs, data);
 
       await SessionRepository.setOutput(sessionId, {
