@@ -32,6 +32,31 @@ export const swaggerSpec = swaggerJSDoc({
         name: "Sessions",
         description: "AI code generation sessions",
       },
+      {
+        name: "APIs",
+        description: "CRUD operations for managing API definitions",
+      },
+      {
+        name: "API Configs",
+        description: "Manage configuration key-value pairs for APIs",
+      },
+      {
+        name: "UI Schemas",
+        description: "Manage UI schema definitions for APIs",
+      },
+      {
+        name: "Generated Codes",
+        description: "View and manage AI-generated code files",
+      },
+      {
+        name: "Deployments",
+        description: "Manage deployment records for APIs",
+      },
+      {
+        name: "Generate",
+        description:
+          "Simple AI code generation endpoint for VS Code Extension",
+      },
     ],
     components: {
       securitySchemes: {

@@ -12,6 +12,12 @@ import { authRouter } from "./routes/auth.routes";
 import { projectRouter } from "./routes/project.routes";
 import { documentRouter } from "./routes/document.routes";
 import { sessionRouter } from "./routes/session.routes";
+import { apiRouter } from "./routes/api.routes";
+import { apiConfigRouter } from "./routes/apiConfig.routes";
+import { uiSchemaRouter } from "./routes/uiSchema.routes";
+import { generatedCodeRouter } from "./routes/generatedCode.routes";
+import { deploymentRouter } from "./routes/deployment.routes";
+import { generateRouter } from "./routes/generate.routes";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
 
 const app = express();
@@ -48,6 +54,14 @@ app.use("/auth", authRouter);
 app.use("/api/projects", projectRouter);
 app.use("/api/projects", documentRouter);
 app.use("/api/projects", sessionRouter);
+
+// New CMS routes
+app.use("/api/apis", apiRouter);
+app.use("/api/apis/:apiId/configs", apiConfigRouter);
+app.use("/api/apis/:apiId/ui-schemas", uiSchemaRouter);
+app.use("/api/apis/:apiId/generated-codes", generatedCodeRouter);
+app.use("/api/apis/:apiId/deployments", deploymentRouter);
+app.use("/api/generate", generateRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
