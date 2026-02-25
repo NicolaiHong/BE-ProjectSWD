@@ -128,3 +128,88 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 
 CREATE INDEX IF NOT EXISTS ix_refresh_tokens_dev ON refresh_tokens(developer_id);
 CREATE INDEX IF NOT EXISTS ix_refresh_tokens_expires ON refresh_tokens(expires_at);
+
+-- ===== New Enums =====
+DO $$ BEGIN
+  CREATE TYPE api_status AS ENUM ('ACTIVE', 'INACTIVE', 'DEPRECATED');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE deployment_status AS ENUM ('PENDING', 'IN_PROGRESS', 'DEPLOYED', 'FAILED', 'ROLLED_BACK');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE deployment_environment AS ENUM ('DEVELOPMENT', 'STAGING', 'PRODUCTION');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ===== APIs (CMS entity linking to developers + optional project) =====
+CREATE TABLE IF NOT EXISTS apis (
+  id                   uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_developer_id   uuid NOT NULL REFERENCES developers(id) ON DELETE CASCADE,
+  project_id           uuid NULL REFERENCES projects(id) ON DELETE SET NULL,
+  name                 text NOT NULL,
+  description          text NULL,
+  base_url             text NULL,
+  version              text NULL DEFAULT '1.0.0',
+  status               api_status NOT NULL DEFAULT 'ACTIVE',
+  created_at           timestamptz NOT NULL DEFAULT now(),
+  updated_at           timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_apis_owner ON apis(owner_developer_id);
+CREATE INDEX IF NOT EXISTS ix_apis_project ON apis(project_id);
+
+-- ===== API Configs (key-value pairs per API) =====
+CREATE TABLE IF NOT EXISTS api_configs (
+  id         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  api_id     uuid NOT NULL REFERENCES apis(id) ON DELETE CASCADE,
+  key        text NOT NULL,
+  value      text NOT NULL,
+  is_secret  boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT ux_api_config_key UNIQUE (api_id, key)
+);
+
+CREATE INDEX IF NOT EXISTS ix_api_configs_api ON api_configs(api_id);
+
+-- ===== UI Schemas (JSON structure definitions per API) =====
+CREATE TABLE IF NOT EXISTS ui_schemas (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  api_id      uuid NOT NULL REFERENCES apis(id) ON DELETE CASCADE,
+  name        text NOT NULL,
+  schema_json jsonb NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_ui_schemas_api ON ui_schemas(api_id);
+
+-- ===== Generated Codes (source code files produced by AI) =====
+CREATE TABLE IF NOT EXISTS generated_codes (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  api_id                uuid NOT NULL REFERENCES apis(id) ON DELETE CASCADE,
+  generation_session_id uuid NULL REFERENCES generation_sessions(id) ON DELETE SET NULL,
+  file_path             text NOT NULL,
+  content               text NOT NULL,
+  language              text NULL,
+  created_at            timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_generated_codes_api ON generated_codes(api_id);
+CREATE INDEX IF NOT EXISTS ix_generated_codes_session ON generated_codes(generation_session_id);
+
+-- ===== Deployments (deployment records per API) =====
+CREATE TABLE IF NOT EXISTS deployments (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  api_id        uuid NOT NULL REFERENCES apis(id) ON DELETE CASCADE,
+  environment   deployment_environment NOT NULL DEFAULT 'DEVELOPMENT',
+  status        deployment_status NOT NULL DEFAULT 'PENDING',
+  provider      text NULL,
+  metadata_json jsonb NULL,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_deployments_api ON deployments(api_id);
+CREATE INDEX IF NOT EXISTS ix_deployments_status ON deployments(status);

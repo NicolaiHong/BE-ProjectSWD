@@ -69,5 +69,8 @@
   "bugs": {
     "url": "https://github.com/NicolaiHong/AI-generatedscripts/issues"
   },
-  "homepage": "https://github.com/NicolaiHong/AI-generatedscripts#readme"
+  "homepage": "https://github.com/NicolaiHong/AI-generatedscripts#readme",
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
+  }
 }
