@@ -8,8 +8,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install production dependencies only
-RUN npm ci --only=production && \
+# Install production dependencies only (skip postinstall since prisma schema isn't available yet)
+RUN npm ci --omit=dev --ignore-scripts && \
     npm cache clean --force
 
 # ============================================
@@ -23,7 +23,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install ALL dependencies (including devDependencies)
-RUN npm install
+RUN npm install --ignore-scripts
 
 # Copy source code (will be overridden by volume mount)
 COPY . .
@@ -47,14 +47,14 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies (need TypeScript compiler)
-RUN npm install
+# Install all dependencies (skip postinstall, we'll generate prisma manually)
+RUN npm install --ignore-scripts
 
-# Copy source code
+# Copy source code + prisma schema
 COPY . .
 
 # Generate Prisma client then compile TypeScript
-RUN npx prisma generate && npm run build
+RUN npx prisma generate && npx tsc
 
 # ============================================
 # Stage 4: Production
@@ -68,6 +68,10 @@ COPY --from=base /app/node_modules ./node_modules
 
 # Copy compiled JavaScript from builder stage
 COPY --from=builder /app/dist ./dist
+
+# Copy prisma schema (needed at runtime by Prisma client)
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
 
 # Copy package.json for metadata
 COPY package*.json ./
