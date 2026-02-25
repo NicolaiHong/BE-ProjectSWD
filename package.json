@@ -4,6 +4,7 @@
   "description": "Node.js + Express + TypeScript backend API with PostgreSQL database. Fully containerized development environment using Docker.",
   "main": "index.js",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js"
