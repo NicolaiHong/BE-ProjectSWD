@@ -180,7 +180,7 @@ export class AuthService {
 
     // update hash (2-step vì cần record.id làm jti)
     await (
-      await import("../clients/prisma")
+      await import("../clients/prisma.js")
     ).prisma.refresh_tokens.update({
       where: { id: record.id },
       data: { token_hash },

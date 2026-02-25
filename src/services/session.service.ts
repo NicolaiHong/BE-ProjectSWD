@@ -13,7 +13,8 @@ export class SessionService {
   private static async verifyOwnership(projectId: string, developerId: string) {
     const project = await ProjectRepository.findById(projectId);
     if (!project) throw NotFoundError("Project not found");
-    if (project.developer_id !== developerId) throw ForbiddenError("Access denied");
+    if (project.developer_id !== developerId)
+      throw ForbiddenError("Access denied");
     return project;
   }
 
@@ -72,7 +73,10 @@ export class SessionService {
     });
 
     this.executeGeneration(session.id, project, docs, data).catch((err) => {
-      console.error(`[SessionService] Async generation failed for session ${session.id}:`, err);
+      console.error(
+        `[SessionService] Async generation failed for session ${session.id}:`,
+        err,
+      );
     });
 
     return session;
@@ -87,7 +91,7 @@ export class SessionService {
     try {
       await SessionRepository.updateStatus(sessionId, "RUNNING");
 
-      const { Orchestrator } = await import("../ai/orchestrator");
+      const { Orchestrator } = await import("../ai/orchestrator.js");
       const result = await Orchestrator.run(sessionId, project, docs, data);
 
       await SessionRepository.setOutput(sessionId, {
@@ -97,7 +101,10 @@ export class SessionService {
       });
       await SessionRepository.updateStatus(sessionId, "SUCCEEDED");
     } catch (err: any) {
-      console.error(`[SessionService] Generation error for session ${sessionId}:`, err);
+      console.error(
+        `[SessionService] Generation error for session ${sessionId}:`,
+        err,
+      );
       await SessionRepository.updateStatus(
         sessionId,
         "FAILED",
