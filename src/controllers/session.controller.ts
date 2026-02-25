@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { SessionService } from "../services/session.service";
 import { RunGenerationSchema, SessionFilterSchema } from "../dtos/SessionDtos";
 import { BadRequestError } from "../middlewares/errorHandler";
-import type { gen_status } from "../generated/prisma";
+import type { gen_status } from "../generated/prisma/enums";
 
 const asyncHandler = (
   fn: (req: Request, res: Response, next: NextFunction) => Promise<any>,
@@ -66,7 +66,9 @@ export class SessionController {
   static list = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
     const filterResult = SessionFilterSchema.safeParse(req.query);
-    const status = filterResult.success ? filterResult.data.status as gen_status | undefined : undefined;
+    const status = filterResult.success
+      ? (filterResult.data.status as gen_status | undefined)
+      : undefined;
     const sessions = await SessionService.listByProject(
       param(req, "projectId"),
       developerId,
@@ -184,7 +186,9 @@ export class SessionController {
     const developerId = (req as any).developerId as string;
     const parseResult = RunGenerationSchema.safeParse(req.body);
     if (!parseResult.success) {
-      throw BadRequestError(parseResult.error.issues[0]?.message || "Invalid input");
+      throw BadRequestError(
+        parseResult.error.issues[0]?.message || "Invalid input",
+      );
     }
     const session = await SessionService.runGeneration(
       param(req, "projectId"),

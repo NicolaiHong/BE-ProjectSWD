@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import { DocumentService } from "../services/document.service";
 import { UpsertDocumentSchema, DocumentTypeEnum } from "../dtos/DocumentDtos";
 import { BadRequestError } from "../middlewares/errorHandler";
-import type { document_type } from "../generated/prisma";
+import type { document_type } from "../generated/prisma/enums";
 
 const asyncHandler = (
   fn: (req: Request, res: Response, next: NextFunction) => Promise<any>,
@@ -75,7 +75,10 @@ export class DocumentController {
    */
   static list = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
-    const docs = await DocumentService.listByProject(param(req, "projectId"), developerId);
+    const docs = await DocumentService.listByProject(
+      param(req, "projectId"),
+      developerId,
+    );
     return res.json({ success: true, data: docs });
   });
 
@@ -137,7 +140,11 @@ export class DocumentController {
   static getByType = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
     const type = parseDocType(param(req, "type"));
-    const doc = await DocumentService.getByType(param(req, "projectId"), type, developerId);
+    const doc = await DocumentService.getByType(
+      param(req, "projectId"),
+      type,
+      developerId,
+    );
     return res.json({ success: true, data: doc });
   });
 
@@ -201,7 +208,9 @@ export class DocumentController {
     const type = parseDocType(param(req, "type"));
     const parseResult = UpsertDocumentSchema.safeParse(req.body);
     if (!parseResult.success) {
-      throw BadRequestError(parseResult.error.issues[0]?.message || "Invalid input");
+      throw BadRequestError(
+        parseResult.error.issues[0]?.message || "Invalid input",
+      );
     }
     const doc = await DocumentService.upsert(
       param(req, "projectId"),

@@ -6,7 +6,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from "../middlewares/errorHandler";
-import type { gen_status } from "../generated/prisma";
+import type { gen_status } from "../generated/prisma/enums";
 import type { RunGenerationRequest } from "../dtos/SessionDtos";
 
 export class SessionService {

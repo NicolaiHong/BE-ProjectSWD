@@ -1,6 +1,6 @@
 import { prisma } from "../clients/prisma";
 import type { CreateApiRequest, UpdateApiRequest } from "../dtos/ApiDtos";
-import type { api_status } from "../generated/prisma";
+import type { api_status } from "../generated/prisma/enums";
 
 export class ApiRepository {
   static list(developerId: string, page: number, limit: number) {

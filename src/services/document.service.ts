@@ -2,14 +2,15 @@ import { DocumentRepository } from "../repositories/document.repository";
 import { ProjectRepository } from "../repositories/project.repository";
 import { ForbiddenError, NotFoundError } from "../middlewares/errorHandler";
 import { sha256 } from "../utils/tokenHash";
-import type { document_type } from "../generated/prisma";
+import type { document_type } from "../generated/prisma/enums";
 import type { UpsertDocumentRequest } from "../dtos/DocumentDtos";
 
 export class DocumentService {
   private static async verifyOwnership(projectId: string, developerId: string) {
     const project = await ProjectRepository.findById(projectId);
     if (!project) throw NotFoundError("Project not found");
-    if (project.developer_id !== developerId) throw ForbiddenError("Access denied");
+    if (project.developer_id !== developerId)
+      throw ForbiddenError("Access denied");
     return project;
   }
 
@@ -18,7 +19,11 @@ export class DocumentService {
     return DocumentRepository.listByProject(projectId);
   }
 
-  static async getByType(projectId: string, type: document_type, developerId: string) {
+  static async getByType(
+    projectId: string,
+    type: document_type,
+    developerId: string,
+  ) {
     await this.verifyOwnership(projectId, developerId);
     const doc = await DocumentRepository.findByProjectAndType(projectId, type);
     if (!doc) throw NotFoundError(`Document of type ${type} not found`);
@@ -41,7 +46,11 @@ export class DocumentService {
     });
   }
 
-  static async delete(projectId: string, type: document_type, developerId: string) {
+  static async delete(
+    projectId: string,
+    type: document_type,
+    developerId: string,
+  ) {
     await this.verifyOwnership(projectId, developerId);
     const doc = await DocumentRepository.findByProjectAndType(projectId, type);
     if (!doc) throw NotFoundError(`Document of type ${type} not found`);

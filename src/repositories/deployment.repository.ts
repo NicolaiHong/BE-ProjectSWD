@@ -1,6 +1,12 @@
 import { prisma } from "../clients/prisma";
-import type { CreateDeploymentRequest, UpdateDeploymentRequest } from "../dtos/DeploymentDtos";
-import type { deployment_environment, deployment_status } from "../generated/prisma";
+import type {
+  CreateDeploymentRequest,
+  UpdateDeploymentRequest,
+} from "../dtos/DeploymentDtos";
+import type {
+  deployment_environment,
+  deployment_status,
+} from "../generated/prisma/enums";
 
 export class DeploymentRepository {
   static listByApi(apiId: string, page: number, limit: number) {
@@ -28,7 +34,7 @@ export class DeploymentRepository {
         environment: data.environment as deployment_environment,
         status: data.status as deployment_status,
         provider: data.provider ?? null,
-        metadata_json: data.metadata_json as any ?? null,
+        metadata_json: (data.metadata_json as any) ?? null,
       },
     });
   }
@@ -37,10 +43,16 @@ export class DeploymentRepository {
     return prisma.deployments.update({
       where: { id },
       data: {
-        ...(data.environment !== undefined && { environment: data.environment as deployment_environment }),
-        ...(data.status !== undefined && { status: data.status as deployment_status }),
+        ...(data.environment !== undefined && {
+          environment: data.environment as deployment_environment,
+        }),
+        ...(data.status !== undefined && {
+          status: data.status as deployment_status,
+        }),
         ...(data.provider !== undefined && { provider: data.provider }),
-        ...(data.metadata_json !== undefined && { metadata_json: data.metadata_json as any }),
+        ...(data.metadata_json !== undefined && {
+          metadata_json: data.metadata_json as any,
+        }),
         updated_at: new Date(),
       },
     });

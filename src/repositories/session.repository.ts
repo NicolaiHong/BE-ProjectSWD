@@ -1,5 +1,5 @@
 import { prisma } from "../clients/prisma";
-import type { gen_status } from "../generated/prisma";
+import type { gen_status } from "../generated/prisma/enums";
 
 export class SessionRepository {
   static listByProject(projectId: string, status?: gen_status) {
@@ -33,7 +33,11 @@ export class SessionRepository {
     });
   }
 
-  static updateStatus(id: string, status: gen_status, errorMessage?: string | null) {
+  static updateStatus(
+    id: string,
+    status: gen_status,
+    errorMessage?: string | null,
+  ) {
     return prisma.generation_sessions.update({
       where: { id },
       data: {

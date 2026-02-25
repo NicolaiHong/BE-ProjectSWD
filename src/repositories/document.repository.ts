@@ -1,5 +1,5 @@
 import { prisma } from "../clients/prisma";
-import type { document_type } from "../generated/prisma";
+import type { document_type } from "../generated/prisma/enums";
 
 export class DocumentRepository {
   static listByProject(projectId: string) {
@@ -18,7 +18,12 @@ export class DocumentRepository {
   static upsert(
     projectId: string,
     type: document_type,
-    data: { name: string; content: string; content_type: string | null; sha256: string },
+    data: {
+      name: string;
+      content: string;
+      content_type: string | null;
+      sha256: string;
+    },
   ) {
     return prisma.project_documents.upsert({
       where: { project_id_type: { project_id: projectId, type } },
