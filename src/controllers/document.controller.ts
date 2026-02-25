@@ -28,12 +28,112 @@ function parseDocType(raw: string): document_type {
 }
 
 export class DocumentController {
+  /**
+   * @openapi
+   * /api/projects/{projectId}/documents:
+   *   get:
+   *     tags: [Documents]
+   *     summary: List project documents
+   *     description: Get all documents belonging to a project.
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *         description: Project ID
+   *     responses:
+   *       200:
+   *         description: List of documents
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   type: array
+   *                   items:
+   *                     $ref: '#/components/schemas/DocumentResponse'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       404:
+   *         description: Project not found
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   */
   static list = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
     const docs = await DocumentService.listByProject(param(req, "projectId"), developerId);
     return res.json({ success: true, data: docs });
   });
 
+  /**
+   * @openapi
+   * /api/projects/{projectId}/documents/{type}:
+   *   get:
+   *     tags: [Documents]
+   *     summary: Get document by type
+   *     description: Get a specific document by its type (OPENAPI, ENTITY_SCHEMA, ACTION_SPEC, DESIGN_SYSTEM).
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *         description: Project ID
+   *       - in: path
+   *         name: type
+   *         required: true
+   *         schema:
+   *           $ref: '#/components/schemas/DocumentTypeEnum'
+   *         description: Document type
+   *     responses:
+   *       200:
+   *         description: Document details
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   $ref: '#/components/schemas/DocumentResponse'
+   *       400:
+   *         description: Invalid document type
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       404:
+   *         description: Document not found
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   */
   static getByType = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
     const type = parseDocType(param(req, "type"));
@@ -41,6 +141,61 @@ export class DocumentController {
     return res.json({ success: true, data: doc });
   });
 
+  /**
+   * @openapi
+   * /api/projects/{projectId}/documents/{type}:
+   *   put:
+   *     tags: [Documents]
+   *     summary: Create or update a document
+   *     description: Upsert a document for the given project and type. Creates if not exists, updates if it does.
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *         description: Project ID
+   *       - in: path
+   *         name: type
+   *         required: true
+   *         schema:
+   *           $ref: '#/components/schemas/DocumentTypeEnum'
+   *         description: Document type
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/UpsertDocumentRequest'
+   *     responses:
+   *       200:
+   *         description: Document created or updated
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *                 data:
+   *                   $ref: '#/components/schemas/DocumentResponse'
+   *       400:
+   *         description: Validation error or invalid document type
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   */
   static upsert = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
     const type = parseDocType(param(req, "type"));
@@ -57,6 +212,51 @@ export class DocumentController {
     return res.json({ success: true, data: doc });
   });
 
+  /**
+   * @openapi
+   * /api/projects/{projectId}/documents/{type}:
+   *   delete:
+   *     tags: [Documents]
+   *     summary: Delete a document
+   *     description: Delete a document by project ID and type.
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *         description: Project ID
+   *       - in: path
+   *         name: type
+   *         required: true
+   *         schema:
+   *           $ref: '#/components/schemas/DocumentTypeEnum'
+   *         description: Document type
+   *     responses:
+   *       204:
+   *         description: Document deleted successfully
+   *       400:
+   *         description: Invalid document type
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       404:
+   *         description: Document not found
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   */
   static delete = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
     const type = parseDocType(param(req, "type"));

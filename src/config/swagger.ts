@@ -19,6 +19,19 @@ export const swaggerSpec = swaggerJSDoc({
         description:
           "Authentication endpoints - register, login, OAuth, token management",
       },
+      {
+        name: "Projects",
+        description: "CRUD operations for managing projects",
+      },
+      {
+        name: "Documents",
+        description:
+          "Manage project documents (OpenAPI, Entity Schema, Action Spec, Design System)",
+      },
+      {
+        name: "Sessions",
+        description: "AI code generation sessions",
+      },
     ],
     components: {
       securitySchemes: {
