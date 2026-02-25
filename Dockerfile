@@ -28,6 +28,9 @@ RUN npm install
 # Copy source code (will be overridden by volume mount)
 COPY . .
 
+# Generate Prisma client
+RUN npx prisma generate
+
 # Expose port
 EXPOSE 3000
 
@@ -50,8 +53,8 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Compile TypeScript to JavaScript
-RUN npm run build
+# Generate Prisma client then compile TypeScript
+RUN npx prisma generate && npm run build
 
 # ============================================
 # Stage 4: Production
