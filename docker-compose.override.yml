@@ -4,6 +4,7 @@ services:
       target: development
     volumes:
       - ./src:/app/src
+      - ./prisma:/app/prisma
       - ./nodemon.json:/app/nodemon.json
       - /app/node_modules
       - /app/dist
