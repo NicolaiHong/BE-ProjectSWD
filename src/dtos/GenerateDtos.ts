@@ -5,7 +5,6 @@ export const GenerateRequestSchema = z.object({
   apiId: z.string().uuid().optional(),
   provider: z.enum(["openai", "gemini"]).default("openai"),
   model: z.string().min(1).default("gpt-4o"),
-  apiKey: z.string().min(1).optional(),
 });
 
 export type GenerateRequest = z.infer<typeof GenerateRequestSchema>;

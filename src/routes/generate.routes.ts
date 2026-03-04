@@ -27,9 +27,6 @@ import { GenerateController } from "../controllers/generate.controller";
  *           type: string
  *           default: gpt-4o
  *           description: AI model name
- *         apiKey:
- *           type: string
- *           description: Optional user-provided API key for the selected AI provider. Overrides server default.
  *     GenerateResponse:
  *       type: object
  *       properties:

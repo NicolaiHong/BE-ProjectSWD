@@ -1,7 +1,7 @@
 # ============================================
 # Stage 1: Base - Production dependencies
 # ============================================
-FROM node:20.18-alpine AS base
+FROM node:22-alpine AS base
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ RUN npm ci --omit=dev --ignore-scripts && \
 # ============================================
 # Stage 2: Development
 # ============================================
-FROM node:20.18-alpine AS development
+FROM node:22-alpine AS development
 
 WORKDIR /app
 
@@ -40,7 +40,7 @@ CMD ["npm", "run", "dev"]
 # ============================================
 # Stage 3: Builder - Compile TypeScript
 # ============================================
-FROM node:20.18-alpine AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -59,7 +59,7 @@ RUN npx prisma generate && npx tsc
 # ============================================
 # Stage 4: Production
 # ============================================
-FROM node:20.18-alpine AS production
+FROM node:22-alpine AS production
 
 WORKDIR /app
 
