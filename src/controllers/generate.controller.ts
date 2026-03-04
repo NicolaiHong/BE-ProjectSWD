@@ -53,8 +53,8 @@ export class GenerateController {
       throw BadRequestError(parseResult.error.issues[0]?.message || "Invalid input");
     }
 
-    const { prompt, apiId, provider, model } = parseResult.data;
-    const result = await GenerateService.generate(prompt, provider, model, apiId);
+    const { prompt, apiId, provider, model, apiKey } = parseResult.data;
+    const result = await GenerateService.generate(prompt, provider, model, apiId, apiKey);
     return res.json(result);
   });
 }

@@ -6,12 +6,12 @@ import { GeneratedCodeRepository } from "../repositories/generatedCode.repositor
 import { ApiRepository } from "../repositories/api.repository";
 import { SYSTEM_PROMPT } from "../ai/systemPrompt";
 
-function getProvider(providerName: string): IAIProvider {
+function getProvider(providerName: string, apiKey?: string): IAIProvider {
   switch (providerName.toLowerCase()) {
     case "openai":
-      return new OpenAIProvider();
+      return new OpenAIProvider(undefined, apiKey);
     case "gemini":
-      return new GeminiProvider();
+      return new GeminiProvider(apiKey);
     default:
       throw new Error(`Unknown AI provider: ${providerName}`);
   }
@@ -34,8 +34,9 @@ export class GenerateService {
     providerName: string = "openai",
     model: string = "gpt-4o",
     apiId?: string,
+    apiKey?: string,
   ): Promise<GenerateResult> {
-    const provider = getProvider(providerName);
+    const provider = getProvider(providerName, apiKey);
     console.log(`[GenerateService] Calling ${provider.name} with model ${model}`);
 
     const aiResponse = await provider.generateCode(prompt, model);
