@@ -1,4 +1,5 @@
 import { AuthRepository } from "../repositories/auth.repository";
+import { prisma } from "../clients/prisma";
 import { hashPassword, verifyPassword } from "../utils/password";
 import { sha256 } from "../utils/tokenHash";
 import {
@@ -171,7 +172,7 @@ export class AuthService {
     const expiresAt = computeRefreshExpiry();
     const record = await AuthRepository.createRefreshTokenRecord(
       developerId,
-      "PENDING",
+      `PENDING_${cryptoRandom()}`,
       expiresAt,
     );
 
@@ -179,9 +180,7 @@ export class AuthService {
     const token_hash = sha256(refreshToken);
 
     // update hash (2-step vì cần record.id làm jti)
-    await (
-      await import("../clients/prisma.js")
-    ).prisma.refresh_tokens.update({
+    await prisma.refresh_tokens.update({
       where: { id: record.id },
       data: { token_hash },
     });

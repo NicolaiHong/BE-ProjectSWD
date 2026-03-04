@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS developers (
   email         citext NULL,
   display_name  text NULL,
   avatar_url    text NULL,
+  password_hash text NULL,
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now()
 );
