@@ -24,12 +24,27 @@ export class GeminiProvider implements IAIProvider {
     this.apiKey = apiKey || config.geminiApiKey;
   }
 
+  private resolveModelId(model: string): string {
+    return model.replace(/^models\//, "");
+  }
+
+  private getMaxOutputTokens(model: string): number {
+    // Gemini 2.0 Flash / Flash-Lite 
+    if (model.startsWith("gemini-2.0")) return 8192;
+    // Gemini 2.5 Flash / Pro / Flash-Lite 
+    if (model.startsWith("gemini-2.5")) return 65536;
+    return 8192;
+  }
+
   async generateCode(prompt: string, model: string): Promise<AIResponse> {
     if (!this.apiKey) {
       throw new Error("GEMINI_API_KEY is not configured");
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.apiKey}`;
+    const modelId = this.resolveModelId(model);
+    const maxTokens = this.getMaxOutputTokens(modelId);
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${this.apiKey}`;
     const response = await fetch(url, {
       method: "POST",
       headers: {
@@ -47,7 +62,7 @@ export class GeminiProvider implements IAIProvider {
         ],
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 16000,
+          maxOutputTokens: maxTokens,
           responseMimeType: "application/json",
         },
       }),
