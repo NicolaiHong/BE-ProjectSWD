@@ -51,5 +51,6 @@ import { GenerateController } from "../controllers/generate.controller";
 
 export const generateRouter = Router();
 
-// No auth required for this endpoint
+// No auth required for these endpoints
+generateRouter.get("/templates", GenerateController.getTemplates);
 generateRouter.post("/", GenerateController.generate);
