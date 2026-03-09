@@ -14,6 +14,100 @@ const asyncHandler = (
 export class GenerateController {
   /**
    * @openapi
+   * /api/generate/templates:
+   *   get:
+   *     tags: [Generate]
+   *     summary: Get pre-built prompt templates
+   *     description: Returns a list of pre-built prompt templates for common UI patterns.
+   *     responses:
+   *       200:
+   *         description: List of prompt templates
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 templates:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                     properties:
+   *                       id:
+   *                         type: string
+   *                       label:
+   *                         type: string
+   *                       description:
+   *                         type: string
+   *                       prompt:
+   *                         type: string
+   */
+  static getTemplates = asyncHandler(async (_req: Request, res: Response) => {
+    const templates = [
+      {
+        id: "crud-admin",
+        label: "CRUD Admin Dashboard",
+        description: "Full admin dashboard with table, search, pagination, and CRUD modals",
+        prompt:
+          "Create a complete admin dashboard with a data table that supports search, filtering, sorting, and pagination. Include Create, Read, Update, Delete modals/forms with validation. Add a sidebar navigation and top header with user menu.",
+      },
+      {
+        id: "ecommerce-listing",
+        label: "E-commerce Product Listing",
+        description: "Product grid with filters, cart, and product detail",
+        prompt:
+          "Build an e-commerce product listing page with a responsive product grid showing image, name, price, and rating. Include a sidebar with category filters, price range slider, and sorting options. Add an 'Add to Cart' button on each card and a sticky cart summary.",
+      },
+      {
+        id: "auth-pages",
+        label: "Authentication Pages",
+        description: "Login, Register, and Forgot Password pages",
+        prompt:
+          "Create authentication pages: Login (email + password with remember me), Register (name, email, password, confirm password with validation), and Forgot Password (email input). Include form validation, error messages, loading states, and links between pages. Add OAuth buttons for Google and GitHub.",
+      },
+      {
+        id: "analytics-dashboard",
+        label: "Analytics Dashboard",
+        description: "Dashboard with charts, stats cards, and data tables",
+        prompt:
+          "Build an analytics dashboard with: stat summary cards (total users, revenue, orders, growth), a line chart for revenue over time, a bar chart for monthly comparisons, a pie chart for category distribution, and a recent activity table. Make it fully responsive.",
+      },
+      {
+        id: "user-management",
+        label: "User Management",
+        description: "User list with roles, permissions, and profile editing",
+        prompt:
+          "Create a user management system with: a user table (avatar, name, email, role, status, last login), search and filter by role/status, user detail/edit drawer, role assignment, bulk actions (activate/deactivate/delete), and an invite user modal with email input.",
+      },
+      {
+        id: "settings-profile",
+        label: "Settings & Profile",
+        description: "User profile and application settings pages",
+        prompt:
+          "Build a settings page with tabs: Profile (avatar upload, name, email, bio), Account (change password, two-factor auth toggle), Notifications (email/push toggles per category), and Appearance (theme toggle dark/light, language selector). Include save/cancel buttons with unsaved changes warning.",
+      },
+      {
+        id: "blog-cms",
+        label: "Blog / Content Management",
+        description: "Blog post list, editor, and preview",
+        prompt:
+          "Create a blog content management system with: a post list table (title, author, status, date, actions), a rich text editor page for creating/editing posts with title, category, tags, featured image, and content body. Include a preview mode and publish/draft toggle.",
+      },
+      {
+        id: "chat-messaging",
+        label: "Chat / Messaging UI",
+        description: "Real-time chat interface with conversations",
+        prompt:
+          "Build a chat messaging interface with: a left sidebar showing conversation list with avatars, names, last message preview, and unread badges. The main area shows the selected conversation's messages with bubbles, timestamps, and a message input with send button and emoji picker. Include online status indicators.",
+      },
+    ];
+
+    return res.json({ success: true, templates });
+  });
+
+  /**
+   * @openapi
    * /api/generate:
    *   post:
    *     tags: [Generate]
