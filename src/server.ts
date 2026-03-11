@@ -62,6 +62,11 @@ app.use("/api/apis/:apiId/ui-schemas", uiSchemaRouter);
 app.use("/api/apis/:apiId/generated-codes", generatedCodeRouter);
 app.use("/api/apis/:apiId/deployments", deploymentRouter);
 app.use("/api/generate", generateRouter);
+app.get("/swagger.json", (_req, res) => {
+  res.setHeader("Content-Type", "application/json");
+  res.setHeader("Content-Disposition", "attachment; filename=swagger.json");
+  res.send(swaggerSpec);
+});
 
 app.use(notFoundHandler);
 app.use(errorHandler);
