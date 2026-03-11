@@ -10,7 +10,9 @@ export const RunGenerationSchema = z
     provider: z.enum(["openai", "gemini"]).default("openai"),
     model: z.string().optional(),
     framework: z.enum(["react", "vue", "angular"]).default("react"),
-    cssStrategy: z.enum(["tailwind", "css-modules", "styled-components"]).default("tailwind"),
+    cssStrategy: z
+      .enum(["tailwind", "css-modules", "styled-components"])
+      .default("tailwind"),
   })
   .transform((data) => ({
     ...data,
@@ -20,9 +22,7 @@ export const RunGenerationSchema = z
 export type RunGenerationRequest = z.output<typeof RunGenerationSchema>;
 
 export const SessionFilterSchema = z.object({
-  status: z
-    .enum(["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"])
-    .optional(),
+  status: z.enum(["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"]).optional(),
 });
 
 export type SessionFilter = z.infer<typeof SessionFilterSchema>;
