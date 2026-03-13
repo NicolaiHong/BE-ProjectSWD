@@ -64,4 +64,8 @@ export class SessionRepository {
       data,
     });
   }
+
+  static deleteById(id: string) {
+    return prisma.generation_sessions.delete({ where: { id } });
+  }
 }

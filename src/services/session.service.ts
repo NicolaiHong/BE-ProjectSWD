@@ -35,6 +35,14 @@ export class SessionService {
     return session;
   }
 
+  static async deleteSession(sessionId: string, developerId: string) {
+    const session = await SessionRepository.findById(sessionId);
+    if (!session) throw NotFoundError("Session not found");
+
+    await this.verifyOwnership(session.project_id, developerId);
+    await SessionRepository.deleteById(sessionId);
+  }
+
   static async runGeneration(
     projectId: string,
     developerId: string,
@@ -91,11 +99,22 @@ export class SessionService {
     try {
       await SessionRepository.updateStatus(sessionId, "RUNNING");
 
-      const { Orchestrator } = await import("../ai/orchestrator.js");
+      const { Orchestrator } = await import("../ai/orchestrator");
       const result = await Orchestrator.run(sessionId, project, docs, data);
 
+      const MAX_OUTPUT_BYTES = 5 * 1024 * 1024;
+      const filesPayload = result.changes
+        .filter(c => c.action !== "delete")
+        .map(c => ({ path: c.path, content: c.content, action: c.action }));
+      const envelope = JSON.stringify({
+        summary_md: result.summary_md,
+        files: filesPayload,
+      });
+      const outputValue =
+        envelope.length <= MAX_OUTPUT_BYTES ? envelope : result.summary_md;
+
       await SessionRepository.setOutput(sessionId, {
-        output_summary_md: result.summary_md,
+        output_summary_md: outputValue,
         repo_commit_sha: result.commit_sha ?? null,
         pr_url: result.pr_url ?? null,
       });

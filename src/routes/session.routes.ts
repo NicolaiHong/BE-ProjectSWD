@@ -116,3 +116,4 @@ sessionRouter.use(requireAuth);
 sessionRouter.get("/:projectId/sessions", SessionController.list);
 sessionRouter.get("/:projectId/sessions/:id", SessionController.getById);
 sessionRouter.post("/:projectId/sessions/run", SessionController.run);
+sessionRouter.delete("/:projectId/sessions/:id", SessionController.delete);

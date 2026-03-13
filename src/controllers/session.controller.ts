@@ -197,4 +197,58 @@ export class SessionController {
     );
     return res.status(202).json({ success: true, data: session });
   });
+
+  /**
+   * @openapi
+   * /api/projects/{projectId}/sessions/{id}:
+   *   delete:
+   *     tags: [Sessions]
+   *     summary: Delete a generation session
+   *     description: Permanently delete a generation session and its output.
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: projectId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *         description: Project ID
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *         description: Session ID
+   *     responses:
+   *       200:
+   *         description: Session deleted
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *       401:
+   *         description: Unauthorized
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   *       404:
+   *         description: Session not found
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/ErrorResponse'
+   */
+  static delete = asyncHandler(async (req: Request, res: Response) => {
+    const developerId = (req as any).developerId as string;
+    await SessionService.deleteSession(param(req, "id"), developerId);
+    return res.json({ success: true });
+  });
 }
