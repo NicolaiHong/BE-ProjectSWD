@@ -2,7 +2,7 @@ import { config } from "../config/constants";
 import { OpenAIProvider } from "./openai.provider";
 import { GeminiProvider } from "./gemini.provider";
 import { FileApplier } from "./fileApplier";
-import type { IAIProvider, AIResponse } from "./provider";
+import type { IAIProvider, AIResponse, AIFileChange } from "./provider";
 import type { RunGenerationRequest } from "../dtos/SessionDtos";
 import path from "path";
 import { execSync } from "child_process";
@@ -23,6 +23,7 @@ export interface OrchestrationResult {
   summary_md: string;
   commit_sha?: string;
   pr_url?: string;
+  changes: AIFileChange[];
 }
 
 export class Orchestrator {
@@ -65,6 +66,7 @@ export class Orchestrator {
       summary_md: aiResponse.summary_md,
       commit_sha: commitSha,
       pr_url: prUrl,
+      changes: aiResponse.changes,
     };
   }
 
