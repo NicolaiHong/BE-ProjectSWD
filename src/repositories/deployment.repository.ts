@@ -35,6 +35,7 @@ export class DeploymentRepository {
         status: data.status as deployment_status,
         provider: data.provider ?? null,
         metadata_json: (data.metadata_json as any) ?? null,
+        generation_session_id: data.generation_session_id ?? null,
       },
     });
   }

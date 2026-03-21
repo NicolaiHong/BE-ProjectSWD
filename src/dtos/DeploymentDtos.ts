@@ -5,6 +5,7 @@ export const CreateDeploymentSchema = z.object({
   status: z.enum(["PENDING", "IN_PROGRESS", "DEPLOYED", "FAILED", "ROLLED_BACK"]).default("PENDING"),
   provider: z.string().max(200).nullable().optional(),
   metadata_json: z.record(z.string(), z.unknown()).nullable().optional(),
+  generation_session_id: z.string().uuid().nullable().optional(),
 });
 
 export type CreateDeploymentRequest = z.infer<typeof CreateDeploymentSchema>;

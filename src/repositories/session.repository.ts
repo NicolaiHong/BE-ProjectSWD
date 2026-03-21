@@ -1,5 +1,5 @@
 import { prisma } from "../clients/prisma";
-import type { gen_status } from "../generated/prisma/enums";
+import type { gen_status, generation_mode } from "../generated/prisma/enums";
 
 export class SessionRepository {
   static listByProject(projectId: string, status?: gen_status) {
@@ -17,9 +17,11 @@ export class SessionRepository {
   }
 
   static create(data: {
-    project_id: string;
+    project_id?: string | null;
     provider: string;
     model: string;
+    mode?: generation_mode;
+    api_id?: string | null;
     openapi_sha256: string | null;
     entity_schema_sha256: string | null;
     action_spec_sha256: string | null;
@@ -28,8 +30,27 @@ export class SessionRepository {
     return prisma.generation_sessions.create({
       data: {
         ...data,
+        project_id: data.project_id ?? null,
+        mode: data.mode ?? "FULL_SOURCE",
+        api_id: data.api_id ?? null,
         status: "QUEUED",
       },
+    });
+  }
+
+  static findByApiAndId(apiId: string, sessionId: string) {
+    return prisma.generation_sessions.findFirst({
+      where: { id: sessionId, api_id: apiId },
+    });
+  }
+
+  static listByApi(apiId: string, mode?: generation_mode) {
+    return prisma.generation_sessions.findMany({
+      where: {
+        api_id: apiId,
+        ...(mode ? { mode } : {}),
+      },
+      orderBy: { created_at: "desc" },
     });
   }
 

@@ -1,6 +1,8 @@
 import { ApiRepository } from "../repositories/api.repository";
-import { ForbiddenError, NotFoundError } from "../middlewares/errorHandler";
+import { SessionRepository } from "../repositories/session.repository";
+import { ForbiddenError, NotFoundError, BadRequestError } from "../middlewares/errorHandler";
 import type { CreateApiRequest, UpdateApiRequest } from "../dtos/ApiDtos";
+import type { workflow_state, generation_mode } from "../generated/prisma/enums";
 
 export class ApiService {
   static async verifyOwnership(apiId: string, developerId: string) {
@@ -34,5 +36,34 @@ export class ApiService {
   static async delete(apiId: string, developerId: string) {
     await this.verifyOwnership(apiId, developerId);
     return ApiRepository.delete(apiId);
+  }
+
+  static async updateWorkflowState(
+    apiId: string,
+    developerId: string,
+    state: workflow_state,
+  ) {
+    await this.verifyOwnership(apiId, developerId);
+    return ApiRepository.updateWorkflowState(apiId, state);
+  }
+
+  static async markReadyToDeploy(apiId: string, developerId: string) {
+    const api = await this.verifyOwnership(apiId, developerId);
+    if (api.workflow_state !== "CODE_GENERATED") {
+      throw BadRequestError(
+        `Cannot mark as ready: current state is "${api.workflow_state ?? "null"}". ` +
+          "Full source code must be generated first.",
+      );
+    }
+    return ApiRepository.updateWorkflowState(apiId, "READY_TO_DEPLOY");
+  }
+
+  static async listSessions(
+    apiId: string,
+    developerId: string,
+    mode?: generation_mode,
+  ) {
+    await this.verifyOwnership(apiId, developerId);
+    return SessionRepository.listByApi(apiId, mode);
   }
 }
