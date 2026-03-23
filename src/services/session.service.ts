@@ -189,6 +189,17 @@ export class SessionService {
     return session;
   }
 
+  static async deleteByApiAndId(
+    apiId: string,
+    sessionId: string,
+    developerId: string,
+  ) {
+    await this.verifyApiOwnership(apiId, developerId);
+    const session = await SessionRepository.findByApiAndId(apiId, sessionId);
+    if (!session) throw NotFoundError("Session not found");
+    await SessionRepository.deleteById(sessionId);
+  }
+
   static async runApiGeneration(
     apiId: string,
     developerId: string,

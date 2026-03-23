@@ -485,6 +485,15 @@ export class Orchestrator {
       isPreview ? `` : `12. ✅ Reusable UI components based on design system`,
       ``,
       `Respond with the strict JSON format as specified in your system instructions.`,
+      ``,
+      // Custom prompt from user (if provided)
+      (data as any).customPrompt ? `## Additional User Instructions` : "",
+      (data as any).customPrompt
+        ? `The user has provided the following additional requirements. Please incorporate them into your generated code:`
+        : "",
+      (data as any).customPrompt
+        ? `\`\`\`\n${(data as any).customPrompt}\n\`\`\``
+        : "",
     ];
 
     return sections.filter(Boolean).join("\n");

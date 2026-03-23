@@ -33,10 +33,12 @@ export const RunApiGenerationSchema = z
       .enum(["tailwind", "css-modules", "styled-components"])
       .default("tailwind"),
     mode: z.enum(["PREVIEW", "FULL_SOURCE"]).default("FULL_SOURCE"),
+    customPrompt: z.string().optional(),
   })
   .transform((data) => ({
     ...data,
     model: data.model?.trim() || DEFAULT_MODELS[data.provider] || "gpt-4o",
+    customPrompt: data.customPrompt?.trim() || undefined,
   }));
 
 export type RunApiGenerationRequest = z.output<typeof RunApiGenerationSchema>;

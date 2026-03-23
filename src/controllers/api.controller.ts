@@ -503,6 +503,47 @@ export class ApiController {
     return res.json({ success: true, data: session });
   });
 
+  /**
+   * @openapi
+   * /api/apis/{id}/sessions/{sessionId}:
+   *   delete:
+   *     tags: [APIs]
+   *     summary: Delete a specific session for an API
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *       - in: path
+   *         name: sessionId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *     responses:
+   *       204:
+   *         description: Session deleted
+   *       401:
+   *         description: Unauthorized
+   *       404:
+   *         description: Session not found
+   */
+  static deleteSessionById = asyncHandler(
+    async (req: Request, res: Response) => {
+      const developerId = (req as any).developerId as string;
+      await SessionService.deleteByApiAndId(
+        param(req, "id"),
+        param(req, "sessionId"),
+        developerId,
+      );
+      return res.status(204).send();
+    },
+  );
+
   // ===== API Documents (for API-centric workflow without project) =====
 
   /**

@@ -112,6 +112,7 @@ apiRouter.post("/:id/ready-to-deploy", ApiController.markReadyToDeploy);
 apiRouter.get("/:id/sessions", ApiController.listSessions);
 apiRouter.post("/:id/sessions/run", ApiController.runSession);
 apiRouter.get("/:id/sessions/:sessionId", ApiController.getSessionById);
+apiRouter.delete("/:id/sessions/:sessionId", ApiController.deleteSessionById);
 
 // API-scoped documents (for API-centric workflow without project)
 apiRouter.get("/:id/documents", ApiController.listDocuments);
