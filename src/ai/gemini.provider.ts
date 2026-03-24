@@ -29,14 +29,18 @@ export class GeminiProvider implements IAIProvider {
   }
 
   private getMaxOutputTokens(model: string): number {
-    // Gemini 2.0 Flash / Flash-Lite 
+    // Gemini 2.0 Flash / Flash-Lite
     if (model.startsWith("gemini-2.0")) return 8192;
-    // Gemini 2.5 Flash / Pro / Flash-Lite 
+    // Gemini 2.5 Flash / Pro / Flash-Lite
     if (model.startsWith("gemini-2.5")) return 65536;
     return 8192;
   }
 
-  async generateCode(prompt: string, model: string): Promise<AIResponse> {
+  async generateCode(
+    prompt: string,
+    model: string,
+    systemPrompt?: string,
+  ): Promise<AIResponse> {
     if (!this.apiKey) {
       throw new Error("GEMINI_API_KEY is not configured");
     }
@@ -52,7 +56,7 @@ export class GeminiProvider implements IAIProvider {
       },
       body: JSON.stringify({
         systemInstruction: {
-          parts: [{ text: SYSTEM_PROMPT }],
+          parts: [{ text: systemPrompt || SYSTEM_PROMPT }],
         },
         contents: [
           {
@@ -86,7 +90,9 @@ export class GeminiProvider implements IAIProvider {
     try {
       parsed = JSON.parse(content);
     } catch {
-      throw new Error(`Gemini response is not valid JSON: ${content.substring(0, 200)}`);
+      throw new Error(
+        `Gemini response is not valid JSON: ${content.substring(0, 200)}`,
+      );
     }
 
     const validated = AIResponseSchema.safeParse(parsed);

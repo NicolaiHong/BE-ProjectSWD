@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { GenerateService } from "../services/generate.service";
-import { GenerateRequestSchema } from "../dtos/GenerateDtos";
+import {
+  GenerateRequestSchema,
+  GeneratePreviewRequestSchema,
+} from "../dtos/GenerateDtos";
 import { BadRequestError } from "../middlewares/errorHandler";
 
 const asyncHandler = (
@@ -48,7 +51,8 @@ export class GenerateController {
       {
         id: "crud-admin",
         label: "CRUD Admin Dashboard",
-        description: "Full admin dashboard with table, search, pagination, and CRUD modals",
+        description:
+          "Full admin dashboard with table, search, pagination, and CRUD modals",
         prompt:
           "Create a complete admin dashboard with a data table that supports search, filtering, sorting, and pagination. Include Create, Read, Update, Delete modals/forms with validation. Add a sidebar navigation and top header with user menu.",
       },
@@ -144,11 +148,91 @@ export class GenerateController {
   static generate = asyncHandler(async (req: Request, res: Response) => {
     const parseResult = GenerateRequestSchema.safeParse(req.body);
     if (!parseResult.success) {
-      throw BadRequestError(parseResult.error.issues[0]?.message || "Invalid input");
+      throw BadRequestError(
+        parseResult.error.issues[0]?.message || "Invalid input",
+      );
     }
 
     const { prompt, apiId, provider, model } = parseResult.data;
-    const result = await GenerateService.generate(prompt, provider, model, apiId);
+    const result = await GenerateService.generate(
+      prompt,
+      provider,
+      model,
+      apiId,
+    );
+    return res.json(result);
+  });
+
+  /**
+   * @openapi
+   * /api/generate/preview:
+   *   post:
+   *     tags: [Generate]
+   *     summary: Generate UI preview from API spec (simplified input flow)
+   *     description: >
+   *       Simplified input flow for preview generation. Only requires API specification.
+   *       Actions and design can be described with natural language prompts instead of JSON files.
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - apiSpec
+   *             properties:
+   *               apiSpec:
+   *                 type: string
+   *                 description: OpenAPI specification (YAML or JSON content)
+   *               actionsPrompt:
+   *                 type: string
+   *                 description: Natural language description of desired actions/features
+   *               designPrompt:
+   *                 type: string
+   *                 description: Natural language description of design preferences
+   *               customPrompt:
+   *                 type: string
+   *                 description: Additional custom instructions
+   *               provider:
+   *                 type: string
+   *                 enum: [openai, gemini]
+   *                 default: openai
+   *               model:
+   *                 type: string
+   *     responses:
+   *       200:
+   *         description: Preview generated successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/GenerateResponse'
+   *       400:
+   *         description: Validation error
+   */
+  static generatePreview = asyncHandler(async (req: Request, res: Response) => {
+    const parseResult = GeneratePreviewRequestSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      throw BadRequestError(
+        parseResult.error.issues[0]?.message || "Invalid input",
+      );
+    }
+
+    const {
+      apiSpec,
+      actionsPrompt,
+      designPrompt,
+      customPrompt,
+      provider,
+      model,
+    } = parseResult.data;
+    const result = await GenerateService.generatePreview(
+      apiSpec,
+      provider,
+      model,
+      actionsPrompt,
+      designPrompt,
+      customPrompt,
+    );
     return res.json(result);
   });
 }
