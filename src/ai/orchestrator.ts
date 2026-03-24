@@ -1,6 +1,7 @@
 import { config } from "../config/constants";
 import { OpenAIProvider } from "./openai.provider";
 import { GeminiProvider } from "./gemini.provider";
+import { GroqProvider } from "./groq.provider";
 import { FileApplier } from "./fileApplier";
 import type { IAIProvider, AIResponse, AIFileChange } from "./provider";
 import type {
@@ -19,6 +20,8 @@ function getProvider(providerName: string): IAIProvider {
       return new OpenAIProvider();
     case "gemini":
       return new GeminiProvider();
+    case "groq":
+      return new GroqProvider();
     default:
       throw new Error(`Unknown AI provider: ${providerName}`);
   }
