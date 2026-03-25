@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import { GeneratedCodeService } from "../services/generatedCode.service";
-import { CreateGeneratedCodeSchema } from "../dtos/GeneratedCodeDtos";
+import {
+  CreateGeneratedCodeSchema,
+  GeneratedCodeFiltersSchema,
+} from "../dtos/GeneratedCodeDtos";
 import { PaginationSchema } from "../dtos/ApiDtos";
 import { BadRequestError } from "../middlewares/errorHandler";
 
@@ -71,7 +74,12 @@ export class GeneratedCodeController {
   static list = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
     const pag = PaginationSchema.parse(req.query);
-    const result = await GeneratedCodeService.list(param(req, "apiId"), developerId, pag.page, pag.limit);
+    const result = await GeneratedCodeService.list(
+      param(req, "apiId"),
+      developerId,
+      pag.page,
+      pag.limit,
+    );
     return res.json({ success: true, ...result });
   });
 
@@ -113,7 +121,10 @@ export class GeneratedCodeController {
    */
   static getById = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
-    const code = await GeneratedCodeService.getById(param(req, "id"), developerId);
+    const code = await GeneratedCodeService.getById(
+      param(req, "id"),
+      developerId,
+    );
     return res.json({ success: true, data: code });
   });
 
@@ -148,9 +159,15 @@ export class GeneratedCodeController {
     const developerId = (req as any).developerId as string;
     const parseResult = CreateGeneratedCodeSchema.safeParse(req.body);
     if (!parseResult.success) {
-      throw BadRequestError(parseResult.error.issues[0]?.message || "Invalid input");
+      throw BadRequestError(
+        parseResult.error.issues[0]?.message || "Invalid input",
+      );
     }
-    const code = await GeneratedCodeService.create(param(req, "apiId"), developerId, parseResult.data);
+    const code = await GeneratedCodeService.create(
+      param(req, "apiId"),
+      developerId,
+      parseResult.data,
+    );
     return res.status(201).json({ success: true, data: code });
   });
 
@@ -184,6 +201,117 @@ export class GeneratedCodeController {
   static delete = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
     await GeneratedCodeService.delete(param(req, "id"), developerId);
+    return res.status(204).send();
+  });
+
+  // Global endpoints for Code History feature
+
+  /**
+   * @openapi
+   * /api/generated-codes:
+   *   get:
+   *     tags: [Generated Codes]
+   *     summary: List all generated codes for the authenticated developer
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: page
+   *         schema:
+   *           type: integer
+   *           default: 1
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 20
+   *       - in: query
+   *         name: search
+   *         schema:
+   *           type: string
+   *         description: Search in file path
+   *       - in: query
+   *         name: apiId
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *         description: Filter by API ID
+   *       - in: query
+   *         name: language
+   *         schema:
+   *           type: string
+   *         description: Filter by language
+   *     responses:
+   *       200:
+   *         description: Paginated list of all generated codes
+   */
+  static listAll = asyncHandler(async (req: Request, res: Response) => {
+    const developerId = (req as any).developerId as string;
+    const pag = PaginationSchema.parse(req.query);
+    const filters = GeneratedCodeFiltersSchema.parse(req.query);
+    const result = await GeneratedCodeService.listAll(
+      developerId,
+      pag.page,
+      pag.limit,
+      filters,
+    );
+    return res.json({ success: true, ...result });
+  });
+
+  /**
+   * @openapi
+   * /api/generated-codes/{id}:
+   *   get:
+   *     tags: [Generated Codes]
+   *     summary: Get generated code by ID (global endpoint)
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *     responses:
+   *       200:
+   *         description: Generated code details
+   *       404:
+   *         description: Not found
+   */
+  static getByIdGlobal = asyncHandler(async (req: Request, res: Response) => {
+    const developerId = (req as any).developerId as string;
+    const code = await GeneratedCodeService.getByIdGlobal(
+      param(req, "id"),
+      developerId,
+    );
+    return res.json({ success: true, data: code });
+  });
+
+  /**
+   * @openapi
+   * /api/generated-codes/{id}:
+   *   delete:
+   *     tags: [Generated Codes]
+   *     summary: Delete generated code by ID (global endpoint)
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *     responses:
+   *       204:
+   *         description: Generated code deleted
+   *       404:
+   *         description: Not found
+   */
+  static deleteGlobal = asyncHandler(async (req: Request, res: Response) => {
+    const developerId = (req as any).developerId as string;
+    await GeneratedCodeService.deleteGlobal(param(req, "id"), developerId);
     return res.status(204).send();
   });
 }

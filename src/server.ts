@@ -15,7 +15,10 @@ import { sessionRouter } from "./routes/session.routes";
 import { apiRouter } from "./routes/api.routes";
 import { apiConfigRouter } from "./routes/apiConfig.routes";
 import { uiSchemaRouter } from "./routes/uiSchema.routes";
-import { generatedCodeRouter } from "./routes/generatedCode.routes";
+import {
+  generatedCodeRouter,
+  globalGeneratedCodeRouter,
+} from "./routes/generatedCode.routes";
 import { deploymentRouter } from "./routes/deployment.routes";
 import { generateRouter } from "./routes/generate.routes";
 import { errorHandler, notFoundHandler } from "./middlewares/errorHandler";
@@ -61,6 +64,7 @@ app.use("/api/apis/:apiId/configs", apiConfigRouter);
 app.use("/api/apis/:apiId/ui-schemas", uiSchemaRouter);
 app.use("/api/apis/:apiId/generated-codes", generatedCodeRouter);
 app.use("/api/apis/:apiId/deployments", deploymentRouter);
+app.use("/api/generated-codes", globalGeneratedCodeRouter); // Global Code History
 app.use("/api/generate", generateRouter);
 app.get("/swagger.json", (_req, res) => {
   res.setHeader("Content-Type", "application/json");

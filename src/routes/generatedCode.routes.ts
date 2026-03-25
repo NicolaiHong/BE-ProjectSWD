@@ -59,3 +59,12 @@ generatedCodeRouter.get("/", GeneratedCodeController.list);
 generatedCodeRouter.get("/:id", GeneratedCodeController.getById);
 generatedCodeRouter.post("/", GeneratedCodeController.create);
 generatedCodeRouter.delete("/:id", GeneratedCodeController.delete);
+
+// Global router for Code History feature (developer-scoped, not API-scoped)
+export const globalGeneratedCodeRouter = Router();
+
+globalGeneratedCodeRouter.use(requireAuth);
+
+globalGeneratedCodeRouter.get("/", GeneratedCodeController.listAll);
+globalGeneratedCodeRouter.get("/:id", GeneratedCodeController.getByIdGlobal);
+globalGeneratedCodeRouter.delete("/:id", GeneratedCodeController.deleteGlobal);

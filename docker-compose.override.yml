@@ -8,6 +8,7 @@ services:
       - ./nodemon.json:/app/nodemon.json
       - /app/node_modules
       - /app/dist
+      - /app/src/generated  # Preserve Prisma generated client (don't overwrite with host mount)
     command: npm run dev
     environment:
       NODE_ENV: development
