@@ -34,11 +34,16 @@ export const RunApiGenerationSchema = z
       .default("tailwind"),
     mode: z.enum(["PREVIEW", "FULL_SOURCE"]).default("FULL_SOURCE"),
     customPrompt: z.string().optional(),
+    // Optional fallback configuration for documents
+    promptEnhancement: z.string().optional(),
+    designConfiguration: z.string().optional(),
   })
   .transform((data) => ({
     ...data,
     model: data.model?.trim() || DEFAULT_MODELS[data.provider] || "gpt-4o",
     customPrompt: data.customPrompt?.trim() || undefined,
+    promptEnhancement: data.promptEnhancement?.trim() || undefined,
+    designConfiguration: data.designConfiguration?.trim() || undefined,
   }));
 
 export type RunApiGenerationRequest = z.output<typeof RunApiGenerationSchema>;

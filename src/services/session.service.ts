@@ -13,6 +13,12 @@ import type {
   RunGenerationRequest,
   RunApiGenerationRequest,
 } from "../dtos/SessionDtos";
+import {
+  normalizeGenerationInputs,
+  normalizedInputsToDocuments,
+  type GenerationConfig,
+  type DocumentInput,
+} from "../ai/inputNormalizer";
 
 export class SessionService {
   private static async verifyOwnership(projectId: string, developerId: string) {
@@ -70,19 +76,38 @@ export class SessionService {
     const project = await this.verifyOwnership(projectId, developerId);
 
     const docs = await DocumentRepository.listByProject(projectId);
-    const docTypes = docs.map((d) => d.type);
-    const requiredTypes = [
-      "OPENAPI",
-      "ENTITY_SCHEMA",
-      "ACTION_SPEC",
-      "DESIGN_SYSTEM",
-    ] as const;
-    const missing = requiredTypes.filter((t) => !docTypes.includes(t));
-    if (missing.length > 0) {
+
+    // Normalize inputs - derive missing documents from OpenAPI
+    // For project-based flow, we use empty config (no prompt enhancement/design config from request)
+    const docInputs: DocumentInput[] = docs.map((d) => ({
+      type: d.type,
+      content: d.content,
+      name: d.name,
+      sha256: d.sha256,
+    }));
+
+    const normalized = normalizeGenerationInputs(docInputs, {});
+
+    // Only fail if no usable input at all
+    if (!normalized.hasUsableInput) {
       throw BadRequestError(
-        `Missing required documents: ${missing.join(", ")}. All 4 document types must be uploaded before running generation.`,
+        `No usable input document found. Please upload at least an OpenAPI specification.`,
       );
     }
+
+    // Log normalization result for debugging
+    console.log(
+      `[SessionService] Normalized inputs for project ${projectId}:`,
+      {
+        entitySchemaSource: normalized.sourceMetadata.entitySchemaSource,
+        actionSpecSource: normalized.sourceMetadata.actionSpecSource,
+        designSystemSource: normalized.sourceMetadata.designSystemSource,
+        openApiSource: normalized.sourceMetadata.openApiSource,
+      },
+    );
+
+    // Convert normalized inputs back to document array for orchestrator
+    const normalizedDocs = normalizedInputsToDocuments(normalized, docInputs);
 
     const shaMap: Record<string, string | null> = {};
     for (const doc of docs) {
@@ -101,12 +126,14 @@ export class SessionService {
       design_system_sha256: shaMap["DESIGN_SYSTEM"] ?? null,
     });
 
-    this.executeGeneration(session.id, project, docs, data).catch((err) => {
-      console.error(
-        `[SessionService] Async generation failed for session ${session.id}:`,
-        err,
-      );
-    });
+    this.executeGeneration(session.id, project, normalizedDocs, data).catch(
+      (err) => {
+        console.error(
+          `[SessionService] Async generation failed for session ${session.id}:`,
+          err,
+        );
+      },
+    );
 
     return session;
   }
@@ -218,25 +245,42 @@ export class SessionService {
       docs = await ApiDocumentRepository.listByApi(apiId);
     }
 
-    // Validate required documents
-    const docTypes = docs.map((d) => d.type);
-    const requiredTypes = [
-      "OPENAPI",
-      "ENTITY_SCHEMA",
-      "ACTION_SPEC",
-      "DESIGN_SYSTEM",
-    ] as const;
-    const missing = requiredTypes.filter((t) => !docTypes.includes(t));
-    if (missing.length > 0) {
+    // Normalize inputs - derive missing documents from OpenAPI and config
+    const config: GenerationConfig = {
+      promptEnhancement: data.promptEnhancement,
+      designConfiguration: data.designConfiguration,
+      customPrompt: data.customPrompt,
+    };
+
+    const docInputs: DocumentInput[] = docs.map((d) => ({
+      type: d.type,
+      content: d.content,
+      name: d.name,
+      sha256: d.sha256,
+    }));
+
+    const normalized = normalizeGenerationInputs(docInputs, config);
+
+    // Only fail if no usable input at all
+    if (!normalized.hasUsableInput) {
       const hint = api.project_id
-        ? "Upload documents to the linked project."
-        : "Upload documents directly to this API using PUT /api/apis/:id/documents/:type";
-      throw BadRequestError(
-        `Missing required documents: ${missing.join(", ")}. ${hint}`,
-      );
+        ? "Upload an OpenAPI specification to the linked project."
+        : "Upload an OpenAPI specification using PUT /api/apis/:id/documents/OPENAPI";
+      throw BadRequestError(`No usable input document found. ${hint}`);
     }
 
-    // Build SHA map
+    // Log normalization result for debugging
+    console.log(`[SessionService] Normalized inputs for API ${apiId}:`, {
+      entitySchemaSource: normalized.sourceMetadata.entitySchemaSource,
+      actionSpecSource: normalized.sourceMetadata.actionSpecSource,
+      designSystemSource: normalized.sourceMetadata.designSystemSource,
+      openApiSource: normalized.sourceMetadata.openApiSource,
+    });
+
+    // Convert normalized inputs back to document array for orchestrator
+    const normalizedDocs = normalizedInputsToDocuments(normalized, docInputs);
+
+    // Build SHA map from original documents (for tracking)
     const shaMap: Record<string, string | null> = {};
     for (const doc of docs) {
       shaMap[doc.type] = doc.sha256;
@@ -255,15 +299,19 @@ export class SessionService {
       design_system_sha256: shaMap["DESIGN_SYSTEM"] ?? null,
     });
 
-    // Execute async generation
-    this.executeApiGeneration(session.id, project, api, docs, data).catch(
-      (err) => {
-        console.error(
-          `[SessionService] Async API generation failed for session ${session.id}:`,
-          err,
-        );
-      },
-    );
+    // Execute async generation with normalized documents
+    this.executeApiGeneration(
+      session.id,
+      project,
+      api,
+      normalizedDocs,
+      data,
+    ).catch((err) => {
+      console.error(
+        `[SessionService] Async API generation failed for session ${session.id}:`,
+        err,
+      );
+    });
 
     return session;
   }

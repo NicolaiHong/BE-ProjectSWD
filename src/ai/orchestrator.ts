@@ -13,6 +13,7 @@ import { execSync } from "child_process";
 import fs from "fs";
 import yaml from "js-yaml";
 import { ApiRepository } from "../repositories/api.repository";
+import { PREVIEW_SYSTEM_PROMPT, buildPreviewPrompt } from "./previewPrompt";
 
 function getProvider(providerName: string): IAIProvider {
   switch (providerName.toLowerCase()) {
@@ -143,6 +144,8 @@ export class Orchestrator {
       `[Orchestrator] Starting API-scoped generation for session ${sessionId}, API ${api.name}`,
     );
 
+    const isPreview = data.mode === "PREVIEW";
+
     // Scope docs to API
     const scopedDocs = this.scopeDocsToApi(
       docs,
@@ -151,28 +154,47 @@ export class Orchestrator {
       api.base_url,
     );
 
-    // Build prompt - use API info when no project
-    const projectContext = project ?? {
-      name: api.name,
-      description: api.description,
-    };
-    const prompt = this.buildPrompt(
-      projectContext,
-      scopedDocs,
-      { ...data, api_id: api.id },
-      api,
-    );
+    // Build prompt differently for PREVIEW vs FULL mode
+    let prompt: string;
+    if (isPreview) {
+      // For preview: use lightweight prompt focused on HTML generation
+      const openApiDoc = scopedDocs.find((d) => d.type === "OPENAPI");
+      const actionDoc = scopedDocs.find((d) => d.type === "ACTION_SPEC");
+      const designDoc = scopedDocs.find((d) => d.type === "DESIGN_SYSTEM");
+
+      prompt = buildPreviewPrompt({
+        apiSpec: openApiDoc?.content,
+        actionsPrompt: actionDoc?.content,
+        designPrompt: designDoc?.content,
+        customPrompt: (data as any).customPrompt,
+      });
+      console.log("[Orchestrator] Built preview prompt, length:", prompt.length);
+    } else {
+      // For full generation: use comprehensive prompt
+      const projectContext = project ?? {
+        name: api.name,
+        description: api.description,
+      };
+      prompt = this.buildPrompt(
+        projectContext,
+        scopedDocs,
+        { ...data, api_id: api.id },
+        api,
+      );
+    }
 
     const provider = getProvider(data.provider);
     console.log(
       `[Orchestrator] Using provider: ${provider.name}, model: ${data.model}`,
     );
-    const aiResponse = await provider.generateCode(prompt, data.model);
+
+    // Use preview system prompt for PREVIEW mode
+    const aiResponse = isPreview
+      ? await provider.generateCode(prompt, data.model, PREVIEW_SYSTEM_PROMPT)
+      : await provider.generateCode(prompt, data.model);
     console.log(
       `[Orchestrator] AI returned ${aiResponse.changes.length} changes, ${aiResponse.commands.length} commands`,
     );
-
-    const isPreview = data.mode === "PREVIEW";
 
     // Workspace: use project name if available, otherwise API name
     const workspaceName = project?.name ?? api.name;
