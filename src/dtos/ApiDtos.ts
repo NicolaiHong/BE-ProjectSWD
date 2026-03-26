@@ -25,6 +25,18 @@ export const UpdateApiSchema = z.object({
   version: z.string().max(50).nullable().optional(),
   project_id: z.string().uuid().nullable().optional(),
   status: z.enum(["ACTIVE", "INACTIVE", "DEPRECATED"]).optional(),
+  workflow_state: z
+    .enum([
+      "CONFIGURED",
+      "UI_GENERATED",
+      "CODE_GENERATED",
+      "READY_TO_DEPLOY",
+      "DEPLOYING",
+      "DEPLOYED",
+      "FAILED",
+    ])
+    .nullable()
+    .optional(),
 });
 
 export type UpdateApiRequest = z.infer<typeof UpdateApiSchema>;

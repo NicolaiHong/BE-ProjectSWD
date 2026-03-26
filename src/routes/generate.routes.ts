@@ -54,3 +54,4 @@ export const generateRouter = Router();
 // No auth required for these endpoints
 generateRouter.get("/templates", GenerateController.getTemplates);
 generateRouter.post("/", GenerateController.generate);
+generateRouter.post("/preview", GenerateController.generatePreview);

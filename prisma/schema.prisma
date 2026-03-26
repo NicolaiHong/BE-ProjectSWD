@@ -22,11 +22,13 @@ model developers {
 }
 
 model generation_sessions {
-  id                   String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  project_id           String     @db.Uuid
+  id                   String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id           String?         @db.Uuid
   provider             String
   model                String
-  status               gen_status @default(QUEUED)
+  status               gen_status      @default(QUEUED)
+  mode                 generation_mode @default(FULL_SOURCE)
+  api_id               String?         @db.Uuid
   error_message        String?
   openapi_sha256       String?
   entity_schema_sha256 String?
@@ -36,14 +38,17 @@ model generation_sessions {
   repo_commit_sha      String?
   pr_url               String?
   vercel_deploy_url    String?
-  created_at           DateTime   @default(now()) @db.Timestamptz(6)
-  finished_at          DateTime?  @db.Timestamptz(6)
-  projects             projects   @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  created_at           DateTime        @default(now()) @db.Timestamptz(6)
+  finished_at          DateTime?       @db.Timestamptz(6)
+  projects             projects?       @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  apis                 apis?           @relation(fields: [api_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
   generated_codes      generated_codes[]
+  deployments          deployments[]
 
   @@index([created_at], map: "ix_gen_sessions_created_at")
   @@index([project_id], map: "ix_gen_sessions_project")
   @@index([status], map: "ix_gen_sessions_status")
+  @@index([api_id], map: "ix_gen_sessions_api")
 }
 
 model oauth_accounts {
@@ -96,6 +101,22 @@ model project_documents {
   @@index([type], map: "ix_project_documents_type")
 }
 
+model api_documents {
+  id           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  api_id       String        @db.Uuid
+  type         document_type
+  name         String
+  content_type String?
+  content      String
+  sha256       String
+  created_at   DateTime      @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime      @default(now()) @db.Timestamptz(6)
+  apis         apis          @relation(fields: [api_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([api_id, type], map: "ux_api_doc_type")
+  @@index([api_id], map: "ix_api_documents_api")
+}
+
 model refresh_tokens {
   id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   developer_id String     @db.Uuid
@@ -136,6 +157,21 @@ enum api_status {
   DEPRECATED
 }
 
+enum workflow_state {
+  CONFIGURED
+  UI_GENERATED
+  CODE_GENERATED
+  READY_TO_DEPLOY
+  DEPLOYING
+  DEPLOYED
+  FAILED
+}
+
+enum generation_mode {
+  PREVIEW
+  FULL_SOURCE
+}
+
 enum deployment_status {
   PENDING
   IN_PROGRESS
@@ -153,23 +189,26 @@ enum deployment_environment {
 // ===== New models =====
 
 model apis {
-  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  owner_developer_id String     @db.Uuid
-  project_id         String?    @db.Uuid
-  name               String
-  description        String?
-  base_url           String?
-  version            String?    @default("1.0.0")
-  status             api_status @default(ACTIVE)
-  created_at         DateTime   @default(now()) @db.Timestamptz(6)
-  updated_at         DateTime   @default(now()) @db.Timestamptz(6)
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  owner_developer_id  String          @db.Uuid
+  project_id          String?         @db.Uuid
+  name                String
+  description         String?
+  base_url            String?
+  version             String?         @default("1.0.0")
+  status              api_status      @default(ACTIVE)
+  workflow_state      workflow_state?
+  created_at          DateTime        @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime        @default(now()) @db.Timestamptz(6)
 
-  developers         developers @relation(fields: [owner_developer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  projects           projects?  @relation(fields: [project_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
-  api_configs        api_configs[]
-  ui_schemas         ui_schemas[]
-  generated_codes    generated_codes[]
-  deployments        deployments[]
+  developers          developers      @relation(fields: [owner_developer_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  projects            projects?       @relation(fields: [project_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
+  api_configs         api_configs[]
+  api_documents       api_documents[]
+  ui_schemas          ui_schemas[]
+  generated_codes     generated_codes[]
+  deployments         deployments[]
+  generation_sessions generation_sessions[]
 
   @@index([owner_developer_id])
   @@index([project_id])
@@ -220,17 +259,20 @@ model generated_codes {
 }
 
 model deployments {
-  id            String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  api_id        String                 @db.Uuid
-  environment   deployment_environment @default(DEVELOPMENT)
-  status        deployment_status      @default(PENDING)
-  provider      String?
-  metadata_json Json?                  @db.JsonB
-  created_at    DateTime               @default(now()) @db.Timestamptz(6)
-  updated_at    DateTime               @default(now()) @db.Timestamptz(6)
+  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  api_id                String                 @db.Uuid
+  generation_session_id String?                @db.Uuid
+  environment           deployment_environment @default(DEVELOPMENT)
+  status                deployment_status      @default(PENDING)
+  provider              String?
+  metadata_json         Json?                  @db.JsonB
+  created_at            DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime               @default(now()) @db.Timestamptz(6)
 
-  apis          apis                   @relation(fields: [api_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  apis                  apis                   @relation(fields: [api_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  generation_sessions   generation_sessions?   @relation(fields: [generation_session_id], references: [id], onDelete: SetNull, onUpdate: NoAction)
 
   @@index([api_id])
   @@index([status])
+  @@index([generation_session_id])
 }

@@ -1,5 +1,3 @@
-
-
 export interface AIFileChange {
   path: string;
   action: "create" | "update" | "delete";
@@ -14,5 +12,9 @@ export interface AIResponse {
 
 export interface IAIProvider {
   readonly name: string;
-  generateCode(prompt: string, model: string): Promise<AIResponse>;
+  generateCode(
+    prompt: string,
+    model: string,
+    systemPrompt?: string,
+  ): Promise<AIResponse>;
 }

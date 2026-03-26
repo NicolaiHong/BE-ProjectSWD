@@ -103,3 +103,19 @@ apiRouter.get("/:id", ApiController.getById);
 apiRouter.post("/", ApiController.create);
 apiRouter.put("/:id", ApiController.update);
 apiRouter.delete("/:id", ApiController.delete);
+
+// Workflow state management
+apiRouter.patch("/:id/workflow-state", ApiController.updateWorkflowState);
+apiRouter.post("/:id/ready-to-deploy", ApiController.markReadyToDeploy);
+
+// API-scoped sessions (no project required)
+apiRouter.get("/:id/sessions", ApiController.listSessions);
+apiRouter.post("/:id/sessions/run", ApiController.runSession);
+apiRouter.get("/:id/sessions/:sessionId", ApiController.getSessionById);
+apiRouter.delete("/:id/sessions/:sessionId", ApiController.deleteSessionById);
+
+// API-scoped documents (for API-centric workflow without project)
+apiRouter.get("/:id/documents", ApiController.listDocuments);
+apiRouter.get("/:id/documents/:type", ApiController.getDocument);
+apiRouter.put("/:id/documents/:type", ApiController.upsertDocument);
+apiRouter.delete("/:id/documents/:type", ApiController.deleteDocument);

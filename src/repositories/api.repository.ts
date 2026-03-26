@@ -1,6 +1,6 @@
 import { prisma } from "../clients/prisma";
 import type { CreateApiRequest, UpdateApiRequest } from "../dtos/ApiDtos";
-import type { api_status } from "../generated/prisma/enums";
+import type { api_status, workflow_state } from "../generated/prisma/enums";
 
 export class ApiRepository {
   static list(developerId: string, page: number, limit: number) {
@@ -65,6 +65,17 @@ export class ApiRepository {
       data: {
         ...data,
         status: data.status as api_status | undefined,
+        workflow_state: data.workflow_state as workflow_state | undefined,
+        updated_at: new Date(),
+      },
+    });
+  }
+
+  static updateWorkflowState(id: string, state: workflow_state) {
+    return prisma.apis.update({
+      where: { id },
+      data: {
+        workflow_state: state,
         updated_at: new Date(),
       },
     });

@@ -150,7 +150,7 @@ vite.config.ts.timestamp-*
 
 # Docker volumes
 volumes/
-cat >> .gitignore << 'EOF'
+
 # Compiled output
 dist/
 *.js
@@ -158,8 +158,8 @@ dist/
 *.js.map
 *.d.ts.map
 
-# Exceptions (nếu có config files .js)
+# Exceptions (config files .js)
 !*.config.js
-EOF
 
+# Prisma generated
 /src/generated/prisma

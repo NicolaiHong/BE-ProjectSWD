@@ -26,7 +26,11 @@ export class OpenAIProvider implements IAIProvider {
     this.apiKey = apiKey || config.openaiApiKey;
   }
 
-  async generateCode(prompt: string, model: string): Promise<AIResponse> {
+  async generateCode(
+    prompt: string,
+    model: string,
+    systemPrompt?: string,
+  ): Promise<AIResponse> {
     if (!this.apiKey) {
       throw new Error("OPENAI_API_KEY is not configured");
     }
@@ -41,7 +45,7 @@ export class OpenAIProvider implements IAIProvider {
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt || SYSTEM_PROMPT },
           { role: "user", content: prompt },
         ],
         temperature: 0.2,
@@ -68,7 +72,9 @@ export class OpenAIProvider implements IAIProvider {
     try {
       parsed = JSON.parse(content);
     } catch {
-      throw new Error(`AI response is not valid JSON: ${content.substring(0, 200)}`);
+      throw new Error(
+        `AI response is not valid JSON: ${content.substring(0, 200)}`,
+      );
     }
 
     const validated = AIResponseSchema.safeParse(parsed);

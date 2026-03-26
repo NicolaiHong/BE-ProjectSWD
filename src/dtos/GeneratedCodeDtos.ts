@@ -7,4 +7,14 @@ export const CreateGeneratedCodeSchema = z.object({
   generation_session_id: z.string().uuid().nullable().optional(),
 });
 
-export type CreateGeneratedCodeRequest = z.infer<typeof CreateGeneratedCodeSchema>;
+export type CreateGeneratedCodeRequest = z.infer<
+  typeof CreateGeneratedCodeSchema
+>;
+
+export const GeneratedCodeFiltersSchema = z.object({
+  search: z.string().optional(),
+  apiId: z.string().uuid().optional(),
+  language: z.string().optional(),
+});
+
+export type GeneratedCodeFilters = z.infer<typeof GeneratedCodeFiltersSchema>;
