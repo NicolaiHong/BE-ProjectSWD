@@ -67,11 +67,13 @@ export class DeploymentRepository {
         ...(data.status !== undefined && {
           status: data.status as deployment_status,
         }),
-        ...(data.provider !== undefined && { 
-          provider: data.provider as deployment_provider | null 
+        ...(data.provider !== undefined && {
+          provider: data.provider as deployment_provider | null,
         }),
         ...(data.deploy_url !== undefined && { deploy_url: data.deploy_url }),
-        ...(data.error_message !== undefined && { error_message: data.error_message }),
+        ...(data.error_message !== undefined && {
+          error_message: data.error_message,
+        }),
         ...(data.metadata_json !== undefined && {
           metadata_json: data.metadata_json as any,
         }),
@@ -89,7 +91,7 @@ export class DeploymentRepository {
       metadata_json?: Record<string, unknown> | null;
       started_at?: Date | null;
       finished_at?: Date | null;
-    }
+    },
   ) {
     return prisma.deployments.update({
       where: { id },
@@ -112,7 +114,7 @@ export class DeploymentRepository {
       deploy_url?: string | null;
       error_message?: string | null;
       metadata_json?: Record<string, unknown> | null;
-    }
+    },
   ) {
     return prisma.deployments.update({
       where: { id },
@@ -120,7 +122,7 @@ export class DeploymentRepository {
         status: result.status,
         deploy_url: result.deploy_url ?? null,
         error_message: result.error_message ?? null,
-        metadata_json: result.metadata_json as any ?? null,
+        metadata_json: (result.metadata_json as any) ?? null,
         finished_at: new Date(),
         updated_at: new Date(),
       },
@@ -129,5 +131,60 @@ export class DeploymentRepository {
 
   static delete(id: string) {
     return prisma.deployments.delete({ where: { id } });
+  }
+
+  /**
+   * Find active deployment for an API (PENDING or IN_PROGRESS).
+   * Used to prevent duplicate deployments.
+   * Deployments older than 30 minutes are considered stale and ignored.
+   *
+   * @param apiId - API ID
+   * @returns Active deployment or null
+   */
+  static findActiveByApiId(apiId: string) {
+    const STALE_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+    const staleDate = new Date(Date.now() - STALE_THRESHOLD_MS);
+
+    return prisma.deployments.findFirst({
+      where: {
+        api_id: apiId,
+        status: { in: ["PENDING", "IN_PROGRESS"] },
+        created_at: { gte: staleDate },
+      },
+      orderBy: { created_at: "desc" },
+    });
+  }
+
+  /**
+   * Find the most recent deployment for an API regardless of status.
+   * Useful for checking if we can skip creating a new deployment.
+   *
+   * @param apiId - API ID
+   * @returns Latest deployment or null
+   */
+  static findLatestSuccessfulByApiId(apiId: string) {
+    return prisma.deployments.findFirst({
+      where: {
+        api_id: apiId,
+        status: "DEPLOYED",
+      },
+      orderBy: { finished_at: "desc" },
+    });
+  }
+
+  /**
+   * Count active deployments for an API.
+   * Used for duplicate deployment detection.
+   *
+   * @param apiId - API ID
+   * @returns Count of active deployments
+   */
+  static countActiveByApiId(apiId: string) {
+    return prisma.deployments.count({
+      where: {
+        api_id: apiId,
+        status: { in: ["PENDING", "IN_PROGRESS"] },
+      },
+    });
   }
 }

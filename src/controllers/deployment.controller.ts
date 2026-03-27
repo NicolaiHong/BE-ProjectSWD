@@ -1,6 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import { DeploymentService } from "../services/deployment.service";
-import { CreateDeploymentSchema, UpdateDeploymentSchema, StartDeploymentSchema } from "../dtos/DeploymentDtos";
+import {
+  CreateDeploymentSchema,
+  UpdateDeploymentSchema,
+  StartDeploymentSchema,
+} from "../dtos/DeploymentDtos";
 import { PaginationSchema } from "../dtos/ApiDtos";
 import { BadRequestError } from "../middlewares/errorHandler";
 
@@ -112,7 +116,12 @@ export class DeploymentController {
   static list = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
     const pag = PaginationSchema.parse(req.query);
-    const result = await DeploymentService.list(param(req, "apiId"), developerId, pag.page, pag.limit);
+    const result = await DeploymentService.list(
+      param(req, "apiId"),
+      developerId,
+      pag.page,
+      pag.limit,
+    );
     return res.json({ success: true, ...result });
   });
 
@@ -154,7 +163,10 @@ export class DeploymentController {
    */
   static getById = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
-    const deployment = await DeploymentService.getById(param(req, "id"), developerId);
+    const deployment = await DeploymentService.getById(
+      param(req, "id"),
+      developerId,
+    );
     return res.json({ success: true, data: deployment });
   });
 
@@ -189,9 +201,15 @@ export class DeploymentController {
     const developerId = (req as any).developerId as string;
     const parseResult = CreateDeploymentSchema.safeParse(req.body);
     if (!parseResult.success) {
-      throw BadRequestError(parseResult.error.issues[0]?.message || "Invalid input");
+      throw BadRequestError(
+        parseResult.error.issues[0]?.message || "Invalid input",
+      );
     }
-    const deployment = await DeploymentService.create(param(req, "apiId"), developerId, parseResult.data);
+    const deployment = await DeploymentService.create(
+      param(req, "apiId"),
+      developerId,
+      parseResult.data,
+    );
     return res.status(201).json({ success: true, data: deployment });
   });
 
@@ -240,19 +258,29 @@ export class DeploymentController {
    */
   static startDeployment = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
+    const requestId =
+      (req as any).requestId ?? (req.headers["x-request-id"] as string);
     const parseResult = StartDeploymentSchema.safeParse(req.body);
     if (!parseResult.success) {
-      throw BadRequestError(parseResult.error.issues[0]?.message || "Invalid input");
+      throw BadRequestError(
+        parseResult.error.issues[0]?.message || "Invalid input",
+      );
     }
-    const deployment = await DeploymentService.startDeployment(
+    const result = await DeploymentService.startDeployment(
       param(req, "apiId"),
       developerId,
-      parseResult.data
+      parseResult.data,
+      requestId,
     );
-    return res.status(201).json({
+
+    // Return 200 if existing deployment was returned (idempotent), 201 if new
+    const statusCode = result.isExisting ? 200 : 201;
+    return res.status(statusCode).json({
       success: true,
-      data: deployment,
-      message: "Deployment started. Check status for progress.",
+      data: result.deployment,
+      changed: result.changed,
+      message: result.message,
+      isExisting: result.isExisting,
     });
   });
 
@@ -295,7 +323,10 @@ export class DeploymentController {
    */
   static getStatus = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
-    const status = await DeploymentService.getDeploymentStatus(param(req, "id"), developerId);
+    const status = await DeploymentService.getDeploymentStatus(
+      param(req, "id"),
+      developerId,
+    );
     return res.json({ success: true, data: status });
   });
 
@@ -342,7 +373,10 @@ export class DeploymentController {
    */
   static retry = asyncHandler(async (req: Request, res: Response) => {
     const developerId = (req as any).developerId as string;
-    const deployment = await DeploymentService.retryDeployment(param(req, "id"), developerId);
+    const deployment = await DeploymentService.retryDeployment(
+      param(req, "id"),
+      developerId,
+    );
     return res.status(201).json({
       success: true,
       data: deployment,
@@ -389,9 +423,15 @@ export class DeploymentController {
     const developerId = (req as any).developerId as string;
     const parseResult = UpdateDeploymentSchema.safeParse(req.body);
     if (!parseResult.success) {
-      throw BadRequestError(parseResult.error.issues[0]?.message || "Invalid input");
+      throw BadRequestError(
+        parseResult.error.issues[0]?.message || "Invalid input",
+      );
     }
-    const deployment = await DeploymentService.update(param(req, "id"), developerId, parseResult.data);
+    const deployment = await DeploymentService.update(
+      param(req, "id"),
+      developerId,
+      parseResult.data,
+    );
     return res.json({ success: true, data: deployment });
   });
 

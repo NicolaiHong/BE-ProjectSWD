@@ -3,12 +3,54 @@ import { ApiRepository } from "../repositories/api.repository";
 import { GeneratedCodeRepository } from "../repositories/generatedCode.repository";
 import { ApiService } from "./api.service";
 import { NotFoundError, BadRequestError } from "../middlewares/errorHandler";
-import type { CreateDeploymentRequest, UpdateDeploymentRequest, StartDeploymentRequest } from "../dtos/DeploymentDtos";
-import type { deployment_provider, deployment_status } from "../generated/prisma/enums";
-import { getDeploymentProvider, getAvailableProviders, type DeploymentPrerequisites, type SourceFile } from "./providers";
+import type {
+  CreateDeploymentRequest,
+  UpdateDeploymentRequest,
+  StartDeploymentRequest,
+} from "../dtos/DeploymentDtos";
+import type {
+  deployment_provider,
+  deployment_status,
+  workflow_state,
+} from "../generated/prisma/enums";
+import {
+  getDeploymentProvider,
+  getAvailableProviders,
+  type DeploymentPrerequisites,
+  type SourceFile,
+} from "./providers";
+import {
+  ApiWorkflowState,
+  START_DEPLOYMENT_ALLOWED_FROM,
+  DEPLOYMENT_IN_PROGRESS_STATES,
+  DEPLOYMENT_COMPLETE_STATES,
+  type IdempotentResult,
+} from "../constants/workflowStates";
+import {
+  logStateTransition,
+  logIdempotentNoOp,
+  logTransitionRejected,
+  logDeploymentEvent,
+  createLogContext,
+} from "../utils/workflowLogger";
+
+/**
+ * Result type for deployment operations
+ */
+export interface DeploymentResult {
+  deployment: Awaited<ReturnType<typeof DeploymentRepository.findById>>;
+  changed: boolean;
+  message: string;
+  isExisting: boolean;
+}
 
 export class DeploymentService {
-  static async list(apiId: string, developerId: string, page: number, limit: number) {
+  static async list(
+    apiId: string,
+    developerId: string,
+    page: number,
+    limit: number,
+  ) {
     await ApiService.verifyOwnership(apiId, developerId);
     const [data, total] = await Promise.all([
       DeploymentRepository.listByApi(apiId, page, limit),
@@ -24,22 +66,38 @@ export class DeploymentService {
     return deployment;
   }
 
-  static async create(apiId: string, developerId: string, data: CreateDeploymentRequest) {
+  static async create(
+    apiId: string,
+    developerId: string,
+    data: CreateDeploymentRequest,
+  ) {
     await ApiService.verifyOwnership(apiId, developerId);
     const deployment = await DeploymentRepository.create(apiId, data);
     return deployment;
   }
 
-  static async update(deploymentId: string, developerId: string, data: UpdateDeploymentRequest) {
+  static async update(
+    deploymentId: string,
+    developerId: string,
+    data: UpdateDeploymentRequest,
+  ) {
     const deployment = await DeploymentRepository.findById(deploymentId);
     if (!deployment) throw NotFoundError("Deployment not found");
     await ApiService.verifyOwnership(deployment.api_id, developerId);
     const updated = await DeploymentRepository.update(deploymentId, data);
-    // Auto-transition workflow state on deployment status change
+    // Auto-transition workflow state on deployment status change (atomic to prevent race conditions)
     if (data.status === "DEPLOYED") {
-      await ApiRepository.updateWorkflowState(deployment.api_id, "DEPLOYED").catch(() => {});
+      await ApiRepository.atomicStateTransition(
+        deployment.api_id,
+        ["DEPLOYING", "DEPLOY_QUEUED"] as workflow_state[],
+        "DEPLOYED",
+      ).catch(() => {});
     } else if (data.status === "FAILED") {
-      await ApiRepository.updateWorkflowState(deployment.api_id, "FAILED").catch(() => {});
+      await ApiRepository.atomicStateTransition(
+        deployment.api_id,
+        ["DEPLOYING", "DEPLOY_QUEUED"] as workflow_state[],
+        "FAILED",
+      ).catch(() => {});
     }
     return updated;
   }
@@ -59,27 +117,87 @@ export class DeploymentService {
   }
 
   /**
-   * Start a new deployment using the specified provider
+   * Start a new deployment using the specified provider.
+   *
+   * Idempotent behavior:
+   * - If already DEPLOY_QUEUED or DEPLOYING: return existing active deployment
+   * - If already DEPLOYED: allow redeploy (creates new deployment)
+   * - If CODE_GENERATED, READY_TO_DEPLOY, or FAILED: start new deployment
+   * - Otherwise: return 400 error
+   *
+   * Duplicate protection:
+   * - Checks for active deployment before creating new one
+   * - Returns existing deployment if found
+   *
+   * @param apiId - API ID
+   * @param developerId - Developer ID for ownership check
+   * @param data - Deployment configuration
+   * @param requestId - Optional correlation ID for logging
+   * @returns DeploymentResult with deployment data and metadata
    */
   static async startDeployment(
     apiId: string,
     developerId: string,
-    data: StartDeploymentRequest
-  ) {
+    data: StartDeploymentRequest,
+    requestId?: string
+  ): Promise<DeploymentResult> {
     const api = await ApiService.verifyOwnership(apiId, developerId);
+    const currentState = api.workflow_state as ApiWorkflowState | null;
+    const logCtx = createLogContext(apiId, developerId, "POST /deploy", requestId);
 
-    // Check if API is ready to deploy
-    if (api.workflow_state !== "READY_TO_DEPLOY" && api.workflow_state !== "CODE_GENERATED") {
-      throw BadRequestError(
-        `Cannot deploy: API must be in READY_TO_DEPLOY or CODE_GENERATED state. ` +
-        `Current state: ${api.workflow_state ?? "null"}`
+    // Case 1: Deployment already in progress - return existing deployment (idempotent)
+    if (currentState && DEPLOYMENT_IN_PROGRESS_STATES.includes(currentState)) {
+      const existingDeployment = await DeploymentRepository.findActiveByApiId(apiId);
+      if (existingDeployment) {
+        logDeploymentEvent({ ...logCtx, deploymentId: existingDeployment.id }, "DEPLOYMENT_DUPLICATE");
+        logIdempotentNoOp(logCtx, currentState, "startDeployment");
+        return {
+          deployment: existingDeployment,
+          changed: false,
+          message: `Deployment already in progress (${currentState})`,
+          isExisting: true,
+        };
+      }
+      // No active deployment found but state says deploying - inconsistent state
+      // Fall through to create new deployment
+    }
+
+    // Case 2: Already deployed - allow redeploy but mark as explicit redeploy
+    const isRedeploy = currentState && DEPLOYMENT_COMPLETE_STATES.includes(currentState);
+
+    // Case 3: Check if state allows deployment
+    const allowedStates = [...START_DEPLOYMENT_ALLOWED_FROM];
+    if (!currentState || !allowedStates.includes(currentState)) {
+      logTransitionRejected(
+        logCtx,
+        currentState,
+        ApiWorkflowState.DEPLOYING,
+        `Cannot deploy from state ${currentState}`
       );
+      throw BadRequestError(
+        `Cannot deploy: API must be in one of [${allowedStates.join(", ")}] state. ` +
+        `Current state: ${currentState ?? "null"}`
+      );
+    }
+
+    // Check for existing active deployment (duplicate protection)
+    const activeDeployment = await DeploymentRepository.findActiveByApiId(apiId);
+    if (activeDeployment) {
+      logDeploymentEvent({ ...logCtx, deploymentId: activeDeployment.id }, "DEPLOYMENT_DUPLICATE");
+      return {
+        deployment: activeDeployment,
+        changed: false,
+        message: "Active deployment already exists",
+        isExisting: true,
+      };
     }
 
     // Get generated source files
     const sourceFiles = await this.getSourceFilesForApi(apiId);
     if (sourceFiles.length === 0) {
-      throw BadRequestError("No generated source code found. Generate code before deploying.");
+      throw BadRequestError(
+        "No generated source code found. Generate code before deploying.",
+      );
     }
 
     // Get the provider
@@ -96,7 +214,9 @@ export class DeploymentService {
     // Validate prerequisites
     const validation = await provider.validatePrerequisites(prereqs);
     if (!validation.valid) {
-      throw BadRequestError(`Deployment validation failed: ${validation.errors.join(", ")}`);
+      throw BadRequestError(
+        `Deployment validation failed: ${validation.errors.join(", ")}`,
+      );
     }
 
     // Create deployment record
@@ -107,15 +227,43 @@ export class DeploymentService {
       generation_session_id: data.generation_session_id,
     });
 
-    // Update API workflow state to DEPLOYING
-    await ApiRepository.updateWorkflowState(apiId, "DEPLOYING").catch(() => {});
+    // Update API workflow state to DEPLOYING atomically
+    const { changed } = await ApiRepository.atomicStateTransition(
+      apiId,
+      allowedStates as workflow_state[],
+      "DEPLOYING"
+    );
+
+    if (changed) {
+      logStateTransition(logCtx, currentState, ApiWorkflowState.DEPLOYING);
+    }
+
+    logDeploymentEvent(
+      { ...logCtx, deploymentId: deployment.id },
+      "DEPLOYMENT_STARTED",
+      { provider: data.provider, environment: data.environment, isRedeploy }
+    );
 
     // Start deployment asynchronously
-    this.executeDeployment(deployment.id, apiId, provider, prereqs, data.options).catch((err) => {
-      console.error(`[DeploymentService] Async deployment failed for ${deployment.id}:`, err);
+    this.executeDeployment(
+      deployment.id,
+      apiId,
+      provider,
+      prereqs,
+      data.options,
+    ).catch((err) => {
+      console.error(
+        `[DeploymentService] Async deployment failed for ${deployment.id}:`,
+        err,
+      );
     });
 
-    return deployment;
+    return {
+      deployment,
+      changed: true,
+      message: isRedeploy ? "Redeployment started" : "Deployment started",
+      isExisting: false,
+    };
   }
 
   /**
@@ -126,8 +274,11 @@ export class DeploymentService {
     apiId: string,
     provider: ReturnType<typeof getDeploymentProvider>,
     prereqs: DeploymentPrerequisites,
-    options?: Record<string, unknown>
+    options?: Record<string, unknown>,
   ) {
+    const logCtx = createLogContext(apiId, undefined, "executeDeployment");
+    logCtx.deploymentId = deploymentId;
+
     try {
       // Update to IN_PROGRESS
       await DeploymentRepository.updateStatus(deploymentId, "IN_PROGRESS", {
@@ -148,10 +299,18 @@ export class DeploymentService {
           },
         });
 
-        // Update API workflow state
-        await ApiRepository.updateWorkflowState(apiId, "DEPLOYED").catch(() => {});
-        
-        console.log(`[DeploymentService] Deployment ${deploymentId} succeeded: ${result.deployUrl}`);
+        // Update API workflow state atomically
+        await ApiRepository.atomicStateTransition(
+          apiId,
+          ["DEPLOYING"] as workflow_state[],
+          "DEPLOYED"
+        );
+
+        logStateTransition(logCtx, ApiWorkflowState.DEPLOYING, ApiWorkflowState.DEPLOYED);
+        logDeploymentEvent(logCtx, "DEPLOYMENT_SUCCEEDED", {
+          deployUrl: result.deployUrl,
+          providerDeploymentId: result.providerDeploymentId,
+        });
       } else {
         // Update deployment record with failure
         await DeploymentRepository.setDeploymentResult(deploymentId, {
@@ -160,13 +319,23 @@ export class DeploymentService {
           metadata_json: result.metadata,
         });
 
-        // Update API workflow state
-        await ApiRepository.updateWorkflowState(apiId, "FAILED").catch(() => {});
-        
-        console.log(`[DeploymentService] Deployment ${deploymentId} failed: ${result.errorMessage}`);
+        // Update API workflow state to FAILED
+        await ApiRepository.atomicStateTransition(
+          apiId,
+          ["DEPLOYING"] as workflow_state[],
+          "FAILED"
+        );
+
+        logStateTransition(logCtx, ApiWorkflowState.DEPLOYING, ApiWorkflowState.FAILED);
+        logDeploymentEvent(logCtx, "DEPLOYMENT_FAILED", {
+          errorMessage: result.errorMessage,
+        });
       }
     } catch (err: any) {
-      console.error(`[DeploymentService] Deployment error for ${deploymentId}:`, err);
+      console.error(
+        `[DeploymentService] Deployment error for ${deploymentId}:`,
+        err,
+      );
 
       // Update deployment record with error
       await DeploymentRepository.setDeploymentResult(deploymentId, {
@@ -175,7 +344,16 @@ export class DeploymentService {
       });
 
       // Update API workflow state
-      await ApiRepository.updateWorkflowState(apiId, "FAILED").catch(() => {});
+      await ApiRepository.atomicStateTransition(
+        apiId,
+        ["DEPLOYING"] as workflow_state[],
+        "FAILED"
+      );
+
+      logDeploymentEvent(logCtx, "DEPLOYMENT_FAILED", {
+        errorMessage: err.message,
+        stack: err.stack,
+      });
     }
   }
 
@@ -190,20 +368,30 @@ export class DeploymentService {
     // If deployment has a provider and provider deployment ID, check status
     if (deployment.provider && deployment.metadata_json) {
       const metadata = deployment.metadata_json as Record<string, unknown>;
-      const providerDeploymentId = metadata.providerDeploymentId as string | undefined;
+      const providerDeploymentId = metadata.providerDeploymentId as
+        | string
+        | undefined;
 
       if (providerDeploymentId) {
         try {
           const provider = getDeploymentProvider(deployment.provider);
-          const status = await provider.getDeploymentStatus(providerDeploymentId);
+          const status =
+            await provider.getDeploymentStatus(providerDeploymentId);
 
           // Update local record if status changed
           if (status.status !== deployment.status) {
-            await DeploymentRepository.updateStatus(deploymentId, status.status as deployment_status, {
-              deploy_url: status.deployUrl,
-              metadata_json: { ...metadata, ...status.metadata },
-              finished_at: status.status === "DEPLOYED" || status.status === "FAILED" ? new Date() : null,
-            });
+            await DeploymentRepository.updateStatus(
+              deploymentId,
+              status.status as deployment_status,
+              {
+                deploy_url: status.deployUrl,
+                metadata_json: { ...metadata, ...status.metadata },
+                finished_at:
+                  status.status === "DEPLOYED" || status.status === "FAILED"
+                    ? new Date()
+                    : null,
+              },
+            );
           }
 
           return {
@@ -213,7 +401,10 @@ export class DeploymentService {
             providerStatus: status,
           };
         } catch (err) {
-          console.error(`[DeploymentService] Error checking provider status:`, err);
+          console.error(
+            `[DeploymentService] Error checking provider status:`,
+            err,
+          );
         }
       }
     }
@@ -230,7 +421,9 @@ export class DeploymentService {
     await ApiService.verifyOwnership(deployment.api_id, developerId);
 
     if (deployment.status !== "FAILED") {
-      throw BadRequestError(`Cannot retry: deployment is ${deployment.status}, not FAILED`);
+      throw BadRequestError(
+        `Cannot retry: deployment is ${deployment.status}, not FAILED`,
+      );
     }
 
     if (!deployment.provider) {
@@ -248,10 +441,12 @@ export class DeploymentService {
   /**
    * Get source files for an API
    */
-  private static async getSourceFilesForApi(apiId: string): Promise<SourceFile[]> {
+  private static async getSourceFilesForApi(
+    apiId: string,
+  ): Promise<SourceFile[]> {
     // Get all generated codes for this API
     const codes = await GeneratedCodeRepository.listByApi(apiId, 1, 1000);
-    
+
     return codes.map((code) => ({
       path: code.file_path,
       content: code.content,
