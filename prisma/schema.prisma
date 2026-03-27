@@ -186,6 +186,12 @@ enum deployment_environment {
   PRODUCTION
 }
 
+enum deployment_provider {
+  VERCEL
+  RENDER
+  GITHUB_PAGES
+}
+
 // ===== New models =====
 
 model apis {
@@ -264,8 +270,12 @@ model deployments {
   generation_session_id String?                @db.Uuid
   environment           deployment_environment @default(DEVELOPMENT)
   status                deployment_status      @default(PENDING)
-  provider              String?
+  provider              deployment_provider?
+  deploy_url            String?
+  error_message         String?
   metadata_json         Json?                  @db.JsonB
+  started_at            DateTime?              @db.Timestamptz(6)
+  finished_at           DateTime?              @db.Timestamptz(6)
   created_at            DateTime               @default(now()) @db.Timestamptz(6)
   updated_at            DateTime               @default(now()) @db.Timestamptz(6)
 
@@ -275,4 +285,5 @@ model deployments {
   @@index([api_id])
   @@index([status])
   @@index([generation_session_id])
+  @@index([provider])
 }

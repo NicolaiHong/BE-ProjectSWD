@@ -49,10 +49,17 @@ export class ApiService {
 
   static async markReadyToDeploy(apiId: string, developerId: string) {
     const api = await this.verifyOwnership(apiId, developerId);
+    
+    // Idempotent: if already ready, return current state without error
+    if (api.workflow_state === "READY_TO_DEPLOY") {
+      return api;
+    }
+    
+    // Only allow transition from CODE_GENERATED
     if (api.workflow_state !== "CODE_GENERATED") {
       throw BadRequestError(
         `Cannot mark as ready: current state is "${api.workflow_state ?? "null"}". ` +
-          "Full source code must be generated first.",
+          "Full source code must be generated first (state must be CODE_GENERATED).",
       );
     }
     return ApiRepository.updateWorkflowState(apiId, "READY_TO_DEPLOY");
