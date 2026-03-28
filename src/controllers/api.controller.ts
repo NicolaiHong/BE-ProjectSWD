@@ -348,11 +348,20 @@ export class ApiController {
   static markReadyToDeploy = asyncHandler(
     async (req: Request, res: Response) => {
       const developerId = (req as any).developerId as string;
-      const api = await ApiService.markReadyToDeploy(
+      const requestId =
+        (req as any).requestId ?? (req.headers["x-request-id"] as string);
+      const result = await ApiService.markReadyToDeploy(
         param(req, "id"),
         developerId,
+        requestId,
       );
-      return res.json({ success: true, data: api });
+      return res.json({
+        success: true,
+        data: result.data,
+        changed: result.changed,
+        message: result.message,
+        currentState: result.currentState,
+      });
     },
   );
 

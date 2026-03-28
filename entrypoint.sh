@@ -21,6 +21,10 @@ if [ -n "$DB_HOST" ]; then
   echo "==> Database is ready!"
 fi
 
+# Sync database schema
+echo "==> Running Prisma db push..."
+npx prisma db push --skip-generate
+
 # Execute the main command (CMD)
 echo "==> Executing: $@"
 exec "$@"

@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { ApiController } from "../controllers/api.controller";
+import { DeploymentController } from "../controllers/deployment.controller";
 import { requireAuth } from "../middlewares/authJwt";
 
 /**
@@ -107,6 +108,9 @@ apiRouter.delete("/:id", ApiController.delete);
 // Workflow state management
 apiRouter.patch("/:id/workflow-state", ApiController.updateWorkflowState);
 apiRouter.post("/:id/ready-to-deploy", ApiController.markReadyToDeploy);
+
+// Deployment action (start deployment to a provider)
+apiRouter.post("/:id/deploy", DeploymentController.startDeployment);
 
 // API-scoped sessions (no project required)
 apiRouter.get("/:id/sessions", ApiController.listSessions);

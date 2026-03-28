@@ -125,90 +125,137 @@ export class GeminiProvider implements IAIProvider {
     const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!content) {
-      console.error("[GeminiProvider] Full API response:", JSON.stringify(data, null, 2).substring(0, 1000));
+      console.error(
+        "[GeminiProvider] Full API response:",
+        JSON.stringify(data, null, 2).substring(0, 1000),
+      );
       throw new Error("No content in Gemini response");
     }
 
+    // Declare jsonContent in outer scope so it's available for error logging
+    let jsonContent = "";
     let parsed: any;
-    try {
-      // Try to extract JSON from the content
-      let jsonContent = content.trim();
 
-      // Remove markdown code blocks if present (```json ... ```)
-      const jsonBlockMatch = jsonContent.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonBlockMatch) {
-        jsonContent = jsonBlockMatch[1].trim();
+    try {
+      // Step 1: Start with raw trimmed content
+      jsonContent = content.trim();
+      const rawPreview = jsonContent.substring(0, 200);
+
+      // Step 2: Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+      // Use a greedy match for the content inside fences
+      const codeFenceMatch = jsonContent.match(
+        /^[\s\S]*?```(?:json)?\s*\n?([\s\S]*?)\n?```[\s\S]*$/,
+      );
+      if (codeFenceMatch) {
+        jsonContent = codeFenceMatch[1].trim();
+      } else {
+        // Also try inline code fence pattern
+        const inlineMatch = jsonContent.match(/```(?:json)?\s*([\s\S]+?)```/);
+        if (inlineMatch) {
+          jsonContent = inlineMatch[1].trim();
+        }
       }
 
-      // Try to find JSON object boundaries if content has extra text
+      // Step 3: Extract JSON object boundaries (handle extra text before/after)
       const jsonStart = jsonContent.indexOf("{");
       const jsonEnd = jsonContent.lastIndexOf("}");
 
       if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
         jsonContent = jsonContent.substring(jsonStart, jsonEnd + 1);
-      } else if (jsonStart === -1 && jsonContent.startsWith('"')) {
-        // Response might be missing opening brace - try to fix
-        jsonContent = "{" + jsonContent;
-        const newEnd = jsonContent.lastIndexOf("}");
-        if (newEnd === -1) {
-          // Also missing closing brace - try to complete the JSON
-          // This is a best-effort fix for truncated responses
-          jsonContent = jsonContent + '"}]}';
-        }
+      } else if (jsonStart === -1 && jsonEnd === -1) {
+        // No JSON object found at all
+        throw new Error(
+          `No JSON object found in response. Raw preview: ${rawPreview}`,
+        );
+      } else if (jsonStart === -1) {
+        // Missing opening brace but has closing - likely truncated at start
+        throw new Error(
+          `JSON appears truncated (missing opening brace). Raw preview: ${rawPreview}`,
+        );
+      } else {
+        // Has opening but no closing - truncated response
+        throw new Error(
+          `JSON appears truncated (missing closing brace). finishReason: ${finishReason}`,
+        );
       }
 
-      // Remove any control characters that might break JSON parsing
-      // Keep valid whitespace: space, tab, newline, carriage return
-      jsonContent = jsonContent.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
+      // Step 4: Remove control characters (keep valid whitespace)
+      jsonContent = jsonContent.replace(
+        /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,
+        "",
+      );
 
-      // First attempt: direct parse
+      // Step 5: First parse attempt
       try {
         parsed = JSON.parse(jsonContent);
-      } catch (firstError) {
-        console.warn("[GeminiProvider] First parse attempt failed, trying repair...");
+      } catch (firstError: any) {
+        console.warn(
+          "[GeminiProvider] First parse attempt failed:",
+          firstError.message,
+        );
+        console.warn("[GeminiProvider] Attempting JSON repair...");
 
-        // Repair attempt: fix common issues
-        // 1. Escape unescaped newlines inside strings (not between fields)
-        // This is tricky - we'll try a simpler approach: re-encode with proper escaping
-
-        // Try to manually fix the JSON by finding and fixing string values
-        // Replace actual newlines with escaped newlines (but not between key-value pairs)
+        // Repair attempt: escape unescaped newlines/tabs within string values
         let repaired = jsonContent;
-
-        // Find all string values and escape newlines within them
-        // This regex finds strings and replaces unescaped newlines
-        repaired = repaired.replace(/"([^"\\]*(\\.[^"\\]*)*)"/g, (match) => {
-          // Within matched string, escape any actual newlines
-          return match.replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
-        });
+        repaired = repaired.replace(
+          /"([^"\\]*(\\.[^"\\]*)*)"/g,
+          (match: string) => {
+            return match
+              .replace(/\n/g, "\\n")
+              .replace(/\r/g, "\\r")
+              .replace(/\t/g, "\\t");
+          },
+        );
 
         parsed = JSON.parse(repaired);
         console.log("[GeminiProvider] JSON repair successful");
       }
     } catch (parseError: any) {
-      // Log the full content for debugging
-      console.error("[GeminiProvider] Failed to parse JSON response:");
-      console.error("[GeminiProvider] Parse error:", parseError.message);
-      console.error("[GeminiProvider] Content length:", content.length);
-      console.error("[GeminiProvider] finishReason:", finishReason);
+      // Comprehensive error logging
       console.error(
-        "[GeminiProvider] Content preview:",
+        "[GeminiProvider] ========== JSON PARSE FAILURE ==========",
+      );
+      console.error("[GeminiProvider] Parse error:", parseError.message);
+      console.error("[GeminiProvider] finishReason:", finishReason);
+      console.error("[GeminiProvider] Raw content length:", content.length);
+      console.error(
+        "[GeminiProvider] Raw content preview (first 500 chars):",
         content.substring(0, 500),
       );
       console.error(
-        "[GeminiProvider] Content end:",
+        "[GeminiProvider] Raw content end (last 200 chars):",
         content.substring(Math.max(0, content.length - 200)),
       );
 
-      // Try to find the position of the error
-      const posMatch = parseError.message.match(/position (\d+)/i);
-      if (posMatch) {
-        const pos = parseInt(posMatch[1], 10);
+      // Show what we tried to parse (if jsonContent was populated)
+      if (jsonContent && jsonContent !== content.trim()) {
         console.error(
-          "[GeminiProvider] Content around error position:",
-          jsonContent.substring(Math.max(0, pos - 50), pos + 50),
+          "[GeminiProvider] Extracted JSON preview (first 500 chars):",
+          jsonContent.substring(0, 500),
+        );
+        console.error(
+          "[GeminiProvider] Extracted JSON length:",
+          jsonContent.length,
         );
       }
+
+      // Show context around parse error position if available
+      const posMatch = parseError.message.match(/position (\d+)/i);
+      if (posMatch && jsonContent) {
+        const pos = parseInt(posMatch[1], 10);
+        const start = Math.max(0, pos - 50);
+        const end = Math.min(jsonContent.length, pos + 50);
+        console.error(
+          `[GeminiProvider] Content around error position ${pos}:`,
+          jsonContent.substring(start, end),
+        );
+        console.error(
+          `[GeminiProvider] Character at position: '${jsonContent[pos]}' (code: ${jsonContent.charCodeAt(pos)})`,
+        );
+      }
+      console.error(
+        "[GeminiProvider] ========================================",
+      );
 
       throw new Error(
         `Gemini response is not valid JSON (finishReason: ${finishReason}): ${parseError.message}`,
