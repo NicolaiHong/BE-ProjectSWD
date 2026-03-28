@@ -467,4 +467,166 @@ export class DeploymentController {
     await DeploymentService.delete(param(req, "id"), developerId);
     return res.status(204).send();
   });
+
+  // ───── Fix Workflow Endpoints ─────
+
+  /**
+   * @openapi
+   * /api/apis/{apiId}/deployments/{id}/fix-with-ai:
+   *   post:
+   *     tags: [Deployments]
+   *     summary: Start AI-assisted fix for a failed deployment
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: apiId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               prompt:
+   *                 type: string
+   *                 description: Optional user prompt to guide the AI fix
+   *     responses:
+   *       200:
+   *         description: Fix with AI started
+   *       400:
+   *         description: Deployment is not in FAILED state
+   *       404:
+   *         description: Deployment not found
+   */
+  static fixWithAI = asyncHandler(async (req: Request, res: Response) => {
+    const developerId = (req as any).developerId as string;
+    const result = await DeploymentService.fixWithAI(
+      param(req, "id"),
+      developerId,
+      { prompt: req.body?.prompt },
+    );
+    return res.json({ success: true, data: result });
+  });
+
+  /**
+   * @openapi
+   * /api/apis/{apiId}/deployments/{id}/auto-fix:
+   *   post:
+   *     tags: [Deployments]
+   *     summary: Trigger automatic AI fix for a failed deployment
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: apiId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *     responses:
+   *       200:
+   *         description: Auto-fix started or limit reached
+   *       400:
+   *         description: Deployment is not in FAILED state
+   *       404:
+   *         description: Deployment not found
+   */
+  static autoFix = asyncHandler(async (req: Request, res: Response) => {
+    const developerId = (req as any).developerId as string;
+    const result = await DeploymentService.autoFix(
+      param(req, "id"),
+      developerId,
+    );
+    return res.json({ success: true, data: result });
+  });
+
+  /**
+   * @openapi
+   * /api/apis/{apiId}/deployments/{id}/mark-user-fix:
+   *   post:
+   *     tags: [Deployments]
+   *     summary: Mark deployment for manual user fix
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: apiId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *     responses:
+   *       200:
+   *         description: Marked for user fix
+   *       400:
+   *         description: Deployment is not in FAILED state
+   *       404:
+   *         description: Deployment not found
+   */
+  static markUserFix = asyncHandler(async (req: Request, res: Response) => {
+    const developerId = (req as any).developerId as string;
+    const result = await DeploymentService.markUserFix(
+      param(req, "id"),
+      developerId,
+    );
+    return res.json({ success: true, data: result });
+  });
+
+  /**
+   * @openapi
+   * /api/apis/{apiId}/deployments/{id}/logs:
+   *   get:
+   *     tags: [Deployments]
+   *     summary: Get deployment error logs and metadata
+   *     security:
+   *       - bearerAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: apiId
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *       - in: path
+   *         name: id
+   *         required: true
+   *         schema:
+   *           type: string
+   *           format: uuid
+   *     responses:
+   *       200:
+   *         description: Deployment logs returned
+   *       404:
+   *         description: Deployment not found
+   */
+  static getLogs = asyncHandler(async (req: Request, res: Response) => {
+    const developerId = (req as any).developerId as string;
+    const result = await DeploymentService.getDeploymentLogs(
+      param(req, "id"),
+      developerId,
+    );
+    return res.json({ success: true, data: result });
+  });
 }

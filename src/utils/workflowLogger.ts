@@ -155,14 +155,22 @@ export function logDeploymentEvent(
     | "DEPLOYMENT_STARTED"
     | "DEPLOYMENT_SUCCEEDED"
     | "DEPLOYMENT_FAILED"
-    | "DEPLOYMENT_DUPLICATE",
+    | "DEPLOYMENT_DUPLICATE"
+    | "FIX_WITH_AI_STARTED"
+    | "AUTO_FIX_STARTED"
+    | "AUTO_FIX_LIMIT_REACHED"
+    | "USER_FIX_MARKED",
   details?: Record<string, unknown>,
 ): void {
-  const eventMessages = {
+  const eventMessages: Record<string, string> = {
     DEPLOYMENT_STARTED: "Deployment started",
     DEPLOYMENT_SUCCEEDED: "Deployment succeeded",
     DEPLOYMENT_FAILED: "Deployment failed",
     DEPLOYMENT_DUPLICATE: "Duplicate deployment request detected",
+    FIX_WITH_AI_STARTED: "Fix with AI started",
+    AUTO_FIX_STARTED: "Auto-fix attempt started",
+    AUTO_FIX_LIMIT_REACHED: "Auto-fix limit reached, escalating to user",
+    USER_FIX_MARKED: "Marked for manual user fix",
   };
 
   console.log(

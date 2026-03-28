@@ -96,7 +96,7 @@ export class DeploymentService {
       await ApiRepository.atomicStateTransition(
         deployment.api_id,
         ["DEPLOYING", "DEPLOY_QUEUED"] as workflow_state[],
-        "FAILED",
+        "DEPLOY_FAILED",
       ).catch(() => {});
     }
     return updated;
@@ -319,14 +319,14 @@ export class DeploymentService {
           metadata_json: result.metadata,
         });
 
-        // Update API workflow state to FAILED
+        // Update API workflow state to DEPLOY_FAILED (not generic FAILED)
         await ApiRepository.atomicStateTransition(
           apiId,
           ["DEPLOYING"] as workflow_state[],
-          "FAILED"
+          "DEPLOY_FAILED"
         );
 
-        logStateTransition(logCtx, ApiWorkflowState.DEPLOYING, ApiWorkflowState.FAILED);
+        logStateTransition(logCtx, ApiWorkflowState.DEPLOYING, ApiWorkflowState.DEPLOY_FAILED);
         logDeploymentEvent(logCtx, "DEPLOYMENT_FAILED", {
           errorMessage: result.errorMessage,
         });
@@ -343,11 +343,11 @@ export class DeploymentService {
         error_message: err.message || "Unknown deployment error",
       });
 
-      // Update API workflow state
+      // Update API workflow state to DEPLOY_FAILED
       await ApiRepository.atomicStateTransition(
         apiId,
         ["DEPLOYING"] as workflow_state[],
-        "FAILED"
+        "DEPLOY_FAILED"
       );
 
       logDeploymentEvent(logCtx, "DEPLOYMENT_FAILED", {
@@ -436,6 +436,191 @@ export class DeploymentService {
       environment: deployment.environment,
       generation_session_id: deployment.generation_session_id,
     });
+  }
+
+  // ───── Fix Workflow Methods ─────
+
+  /**
+   * Fix with AI: user + AI collaborate to fix build errors.
+   * Transitions DEPLOY_FAILED → FIXING_WITH_AI, then re-generates code.
+   * Max auto-fix attempts: 2, then falls back to USER_FIX_REQUIRED.
+   */
+  static async fixWithAI(
+    deploymentId: string,
+    developerId: string,
+    options?: { prompt?: string }
+  ): Promise<{ deployment: any; message: string }> {
+    const deployment = await DeploymentRepository.findById(deploymentId);
+    if (!deployment) throw NotFoundError("Deployment not found");
+    await ApiService.verifyOwnership(deployment.api_id, developerId);
+
+    if (deployment.status !== "FAILED") {
+      throw BadRequestError(
+        `Cannot fix: deployment is ${deployment.status}, not FAILED`
+      );
+    }
+
+    const logCtx = createLogContext(deployment.api_id, developerId, "POST /fix-with-ai");
+
+    // Transition API state to FIXING_WITH_AI
+    const { changed } = await ApiRepository.atomicStateTransition(
+      deployment.api_id,
+      ["DEPLOY_FAILED", "FAILED"] as workflow_state[],
+      "FIXING_WITH_AI"
+    );
+
+    if (changed) {
+      logStateTransition(logCtx, ApiWorkflowState.DEPLOY_FAILED, ApiWorkflowState.FIXING_WITH_AI);
+    }
+
+    logDeploymentEvent(
+      { ...logCtx, deploymentId: deployment.id },
+      "FIX_WITH_AI_STARTED",
+      { errorMessage: deployment.error_message, userPrompt: options?.prompt }
+    );
+
+    return {
+      deployment,
+      message: "Fix with AI started. State is now FIXING_WITH_AI. Re-generate code when ready.",
+    };
+  }
+
+  /**
+   * Auto-fix with AI: fully automated fix attempt.
+   * Same as fixWithAI but marks it as an automatic retry.
+   * Enforces max 2 auto-fix attempts before escalating to USER_FIX_REQUIRED.
+   */
+  static async autoFix(
+    deploymentId: string,
+    developerId: string
+  ): Promise<{ deployment: any; message: string; autoFixCount: number }> {
+    const deployment = await DeploymentRepository.findById(deploymentId);
+    if (!deployment) throw NotFoundError("Deployment not found");
+    await ApiService.verifyOwnership(deployment.api_id, developerId);
+
+    if (deployment.status !== "FAILED") {
+      throw BadRequestError(
+        `Cannot auto-fix: deployment is ${deployment.status}, not FAILED`
+      );
+    }
+
+    const logCtx = createLogContext(deployment.api_id, developerId, "POST /auto-fix");
+
+    // Count previous auto-fix attempts from metadata
+    const metadata = (deployment.metadata_json as Record<string, unknown>) || {};
+    const autoFixCount = ((metadata.autoFixCount as number) || 0) + 1;
+    const MAX_AUTO_FIX = 2;
+
+    if (autoFixCount > MAX_AUTO_FIX) {
+      // Exceeded max auto-fix attempts, escalate to user
+      await ApiRepository.atomicStateTransition(
+        deployment.api_id,
+        ["DEPLOY_FAILED", "FAILED"] as workflow_state[],
+        "USER_FIX_REQUIRED"
+      );
+
+      logStateTransition(logCtx, ApiWorkflowState.DEPLOY_FAILED, ApiWorkflowState.USER_FIX_REQUIRED);
+      logDeploymentEvent(
+        { ...logCtx, deploymentId: deployment.id },
+        "AUTO_FIX_LIMIT_REACHED",
+        { autoFixCount, maxAutoFix: MAX_AUTO_FIX }
+      );
+
+      return {
+        deployment,
+        message: `Auto-fix limit reached (${MAX_AUTO_FIX} attempts). Manual fix required.`,
+        autoFixCount,
+      };
+    }
+
+    // Update metadata with auto-fix count
+    await DeploymentRepository.update(deploymentId, {
+      metadata_json: { ...metadata, autoFixCount },
+    });
+
+    // Transition API state to FIXING_WITH_AI
+    const { changed } = await ApiRepository.atomicStateTransition(
+      deployment.api_id,
+      ["DEPLOY_FAILED", "FAILED"] as workflow_state[],
+      "FIXING_WITH_AI"
+    );
+
+    if (changed) {
+      logStateTransition(logCtx, ApiWorkflowState.DEPLOY_FAILED, ApiWorkflowState.FIXING_WITH_AI);
+    }
+
+    logDeploymentEvent(
+      { ...logCtx, deploymentId: deployment.id },
+      "AUTO_FIX_STARTED",
+      { autoFixCount, maxAutoFix: MAX_AUTO_FIX, errorMessage: deployment.error_message }
+    );
+
+    return {
+      deployment,
+      message: `Auto-fix attempt ${autoFixCount}/${MAX_AUTO_FIX} started.`,
+      autoFixCount,
+    };
+  }
+
+  /**
+   * Mark for user fix: user will manually fix the code.
+   * Transitions DEPLOY_FAILED → USER_FIX_REQUIRED.
+   */
+  static async markUserFix(
+    deploymentId: string,
+    developerId: string
+  ): Promise<{ deployment: any; message: string }> {
+    const deployment = await DeploymentRepository.findById(deploymentId);
+    if (!deployment) throw NotFoundError("Deployment not found");
+    await ApiService.verifyOwnership(deployment.api_id, developerId);
+
+    if (deployment.status !== "FAILED") {
+      throw BadRequestError(
+        `Cannot mark for user fix: deployment is ${deployment.status}, not FAILED`
+      );
+    }
+
+    const logCtx = createLogContext(deployment.api_id, developerId, "POST /mark-user-fix");
+
+    // Transition API state to USER_FIX_REQUIRED
+    const { changed } = await ApiRepository.atomicStateTransition(
+      deployment.api_id,
+      ["DEPLOY_FAILED", "FAILED"] as workflow_state[],
+      "USER_FIX_REQUIRED"
+    );
+
+    if (changed) {
+      logStateTransition(logCtx, ApiWorkflowState.DEPLOY_FAILED, ApiWorkflowState.USER_FIX_REQUIRED);
+    }
+
+    logDeploymentEvent(
+      { ...logCtx, deploymentId: deployment.id },
+      "USER_FIX_MARKED",
+      { errorMessage: deployment.error_message }
+    );
+
+    return {
+      deployment,
+      message: "Marked for user fix. Edit the code and re-generate when ready.",
+    };
+  }
+
+  /**
+   * Get deployment logs/error details for a failed deployment
+   */
+  static async getDeploymentLogs(
+    deploymentId: string,
+    developerId: string
+  ): Promise<{ deployment: any; errorMessage: string | null; metadata: Record<string, unknown> | null }> {
+    const deployment = await DeploymentRepository.findById(deploymentId);
+    if (!deployment) throw NotFoundError("Deployment not found");
+    await ApiService.verifyOwnership(deployment.api_id, developerId);
+
+    return {
+      deployment,
+      errorMessage: deployment.error_message,
+      metadata: deployment.metadata_json as Record<string, unknown> | null,
+    };
   }
 
   /**

@@ -165,11 +165,15 @@ enum workflow_state {
   DEPLOYING
   DEPLOYED
   FAILED
+  FIXING_WITH_AI
+  USER_FIX_REQUIRED
+  DEPLOY_FAILED
 }
 
 enum generation_mode {
   PREVIEW
   FULL_SOURCE
+  FIX
 }
 
 enum deployment_status {

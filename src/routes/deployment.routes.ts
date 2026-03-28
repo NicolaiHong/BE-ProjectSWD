@@ -153,3 +153,17 @@ deploymentRouter.put("/:id", DeploymentController.update);
 
 // Delete deployment
 deploymentRouter.delete("/:id", DeploymentController.delete);
+
+// ───── Fix Workflow Routes ─────
+
+// Fix with AI (user + AI collaborate)
+deploymentRouter.post("/:id/fix-with-ai", DeploymentController.fixWithAI);
+
+// Auto-fix (fully automated AI fix, max 2 attempts)
+deploymentRouter.post("/:id/auto-fix", DeploymentController.autoFix);
+
+// Mark for manual user fix
+deploymentRouter.post("/:id/mark-user-fix", DeploymentController.markUserFix);
+
+// Get deployment error logs / metadata
+deploymentRouter.get("/:id/logs", DeploymentController.getLogs);

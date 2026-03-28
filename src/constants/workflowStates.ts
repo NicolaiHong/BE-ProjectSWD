@@ -326,16 +326,15 @@ export function mapPrismaState(
  * For states not in Prisma schema, map to closest equivalent
  */
 export function toPrismaState(state: ApiWorkflowState): string {
-  // Map new states to existing Prisma enum values
+  // Map canonical states to Prisma enum values
+  // States with direct Prisma equivalents need no mapping (passthrough via ?? state)
   const prismaMapping: Partial<Record<ApiWorkflowState, string>> = {
     [ApiWorkflowState.DRAFT]: "CONFIGURED",
     [ApiWorkflowState.PREVIEW_GENERATED]: "UI_GENERATED",
-    [ApiWorkflowState.DEPLOY_FAILED]: "FAILED",
     [ApiWorkflowState.DEPLOY_QUEUED]: "DEPLOYING", // closest
     [ApiWorkflowState.PREVIEW_GENERATING]: "CONFIGURED", // no direct equivalent
     [ApiWorkflowState.FULL_SOURCE_GENERATING]: "CODE_GENERATED", // closest
-    [ApiWorkflowState.FIXING_WITH_AI]: "FAILED", // closest
-    [ApiWorkflowState.USER_FIX_REQUIRED]: "FAILED", // closest
+    // FIXING_WITH_AI, USER_FIX_REQUIRED, DEPLOY_FAILED now have direct Prisma enum values
   };
 
   return prismaMapping[state] ?? state;
